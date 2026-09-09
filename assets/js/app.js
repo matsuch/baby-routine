@@ -6,6 +6,7 @@ import {
   fromLocalInput, pad, SIDE_LABEL, toLocalInput,
 } from './format.js';
 import * as WA from './wa.js';
+import * as NTFY from './ntfy.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -513,6 +514,13 @@ function renderAjustes() {
   $('#waWorkerUrl').value = wa.workerUrl;
   $('#waWorkerToken').value = wa.workerToken;
   $('#waSessionLabel').textContent = wa.provider === 'evolution' ? 'Instância' : 'Sessão';
+
+  const ntfy = state.settings.ntfy;
+  $('#ntfyEnabled').checked = !!ntfy.enabled;
+  $('#ntfyFields').hidden = !ntfy.enabled;
+  $('#ntfyServer').value = ntfy.server;
+  $('#ntfyTopic').value = ntfy.topic;
+  $('#ntfyOnReminder').checked = !!ntfy.onReminder;
 }
 
 function baixarBackup() {
@@ -569,6 +577,19 @@ function avisarWhatsApp(texto) {
   });
 }
 
+/** Dispara um push imediato pelo ntfy quando o aviso toca (app aberto). */
+function avisarNtfy(texto) {
+  const ntfy = state.settings.ntfy;
+  if (!ntfy.enabled || !ntfy.onReminder || !ntfy.topic) return;
+  const nome = state.baby.name?.trim();
+  NTFY.publish(ntfy, {
+    title: `Rotina${nome ? ` · ${nome}` : ''}`,
+    message: texto,
+    tags: NTFY.tagPara(texto),
+    priority: 'high',
+  }).catch((err) => console.warn('ntfy falhou:', err.message));
+}
+
 function checarAvisos() {
   if (!state.settings.notify || Notification.permission !== 'granted') return;
   const agora = Date.now();
@@ -582,6 +603,7 @@ function checarAvisos() {
       const corpo = lado ? `Oferecer o lado ${SIDE_LABEL[lado]}.` : 'Toque para registrar.';
       avisar('Hora da mamada 🍼', corpo, chave);
       avisarWhatsApp(`🍼 Hora da mamada. ${corpo}`);
+      avisarNtfy(`🍼 Hora da mamada. ${corpo}`);
     }
   }
 
@@ -594,7 +616,44 @@ function checarAvisos() {
     const corpo = med.dose ? `Dose: ${med.dose}` : `A cada ${med.intervalHours}h.`;
     avisar(`Hora do ${med.name} 💊`, corpo, chave);
     avisarWhatsApp(`💊 Hora do ${med.name}. ${corpo}`);
+    avisarNtfy(`💊 Hora do ${med.name}. ${corpo}`);
   });
+}
+
+/**
+ * Agenda no ntfy os lembretes das próximas `horas` horas (entrega agendada).
+ * Chega mesmo com o app fechado. Dedup local para não repetir a cada toque.
+ */
+async function programarNtfy(horas = 10) {
+  const ntfy = state.settings.ntfy;
+  if (!ntfy.enabled || !ntfy.topic) throw new Error('Configure o ntfy primeiro.');
+  const CHAVE = 'rotina-bebe:ntfy-agendados';
+  let jaAgendados;
+  try { jaAgendados = new Set(JSON.parse(localStorage.getItem(CHAVE) || '[]')); }
+  catch { jaAgendados = new Set(); }
+
+  const agora = Date.now();
+  const nome = state.baby.name?.trim();
+  const linhas = S.agenda(horas).filter((l) => l.at > agora + MS_MIN); // dá margem de 1 min
+  let novos = 0;
+  for (const l of linhas) {
+    const texto = `${l.emoji} ${l.text}`;
+    const chave = `${l.at}|${texto}`;
+    if (jaAgendados.has(chave)) continue;
+    await NTFY.publish(ntfy, {
+      title: `Rotina${nome ? ` · ${nome}` : ''}`,
+      message: texto,
+      tags: NTFY.tagPara(texto),
+      priority: 'high',
+      at: l.at,
+    });
+    jaAgendados.add(chave);
+    novos += 1;
+  }
+  // Guarda só o que ainda é futuro, para o conjunto não crescer sem fim.
+  const mantidos = [...jaAgendados].filter((k) => Number(k.split('|')[0]) > agora);
+  try { localStorage.setItem(CHAVE, JSON.stringify(mantidos)); } catch { /* ignora */ }
+  return { novos, total: linhas.length };
 }
 
 /** Empurra a agenda para o worker 24/7, no máximo a cada 5 min (best-effort). */
@@ -633,6 +692,71 @@ function tick() {
 }
 
 /* ================================================================ WhatsApp (UI) */
+
+/* ================================================================ ntfy (UI) */
+
+function lerConfigNtfy() {
+  const ntfy = state.settings.ntfy;
+  ntfy.server = $('#ntfyServer').value.trim() || 'https://ntfy.sh';
+  ntfy.topic = $('#ntfyTopic').value.trim();
+  ntfy.onReminder = $('#ntfyOnReminder').checked;
+  S.save();
+}
+
+function ligarEventosNtfy() {
+  $('#ntfyEnabled').addEventListener('change', (e) => {
+    state.settings.ntfy.enabled = e.target.checked;
+    $('#ntfyFields').hidden = !e.target.checked;
+    // Na primeira vez, já sugere um tópico aleatório para o usuário.
+    if (e.target.checked && !state.settings.ntfy.topic) {
+      state.settings.ntfy.topic = NTFY.sugerirTopico();
+      $('#ntfyTopic').value = state.settings.ntfy.topic;
+    }
+    S.save();
+  });
+
+  ['ntfyServer', 'ntfyTopic'].forEach((id) => $(`#${id}`).addEventListener('change', lerConfigNtfy));
+  $('#ntfyOnReminder').addEventListener('change', lerConfigNtfy);
+
+  $('#ntfyGen').addEventListener('click', () => {
+    state.settings.ntfy.topic = NTFY.sugerirTopico();
+    $('#ntfyTopic').value = state.settings.ntfy.topic;
+    S.save();
+    toast('Tópico gerado — assine-o no app ntfy');
+  });
+
+  $('#ntfyTest').addEventListener('click', async (e) => {
+    lerConfigNtfy();
+    if (!state.settings.ntfy.topic) { toast('Defina ou gere um tópico'); return; }
+    e.target.disabled = true;
+    toast('Enviando teste…');
+    try {
+      await NTFY.publish(state.settings.ntfy, {
+        title: 'Rotina do Bebê', message: '✅ Teste do Rotina do Bebê — chegou!', tags: 'tada', priority: 'high',
+      });
+      toast('Teste enviado — veja no app ntfy');
+    } catch (err) {
+      alert(`Falha ao enviar: ${err.message}\n\nConfira se o tópico está certo e assinado no app ntfy.`);
+    } finally {
+      e.target.disabled = false;
+    }
+  });
+
+  $('#ntfySchedule').addEventListener('click', async (e) => {
+    lerConfigNtfy();
+    if (!state.settings.ntfy.topic) { toast('Defina ou gere um tópico'); return; }
+    e.target.disabled = true;
+    toast('Programando…');
+    try {
+      const r = await programarNtfy(12);
+      toast(r.novos ? `${r.novos} lembrete(s) programado(s)` : 'Nada novo para programar');
+    } catch (err) {
+      alert(`Falha ao programar: ${err.message}`);
+    } finally {
+      e.target.disabled = false;
+    }
+  });
+}
 
 function lerConfigWhatsApp() {
   const wa = state.settings.wa;
@@ -762,6 +886,7 @@ function ligarEventos() {
   $('#btnAgenda').addEventListener('click', sheetAgenda);
   $('#btnResumo').addEventListener('click', () => copiar(textoResumo()));
 
+  ligarEventosNtfy();
   ligarEventosWhatsApp();
 
   $('#setName').addEventListener('input', (e) => { state.baby.name = e.target.value; S.save(); });

@@ -119,6 +119,34 @@
 
     <div class="card">
       <label class="switch">
+        <span>Push pelo ntfy</span>
+        <input type="checkbox" id="ntfyEnabled">
+      </label>
+      <div id="ntfyFields" hidden>
+        <p class="muted small">Instale o app <strong>ntfy</strong> (iOS/Android), assine o tópico abaixo e receba os avisos como push — sem conta e sem servidor.</p>
+        <label class="field">
+          <span>Servidor</span>
+          <input type="url" id="ntfyServer" placeholder="https://ntfy.sh" autocomplete="off" inputmode="url">
+        </label>
+        <label class="field">
+          <span>Tópico (secreto)</span>
+          <input type="text" id="ntfyTopic" placeholder="rotina-bebe-xxxxxx" autocomplete="off">
+        </label>
+        <label class="switch">
+          <span>Mandar junto com o aviso local</span>
+          <input type="checkbox" id="ntfyOnReminder">
+        </label>
+        <div class="row-2">
+          <button class="btn btn-ghost" id="ntfyTest" type="button">Enviar teste</button>
+          <button class="btn btn-ghost" id="ntfyGen" type="button">Gerar tópico</button>
+        </div>
+        <button class="btn btn-ghost block" id="ntfySchedule" type="button">Programar lembretes da noite</button>
+        <p class="disclaimer">O tópico é <strong>público</strong> para quem souber o nome — por isso use um nome aleatório e não o compartilhe. <strong>Programar lembretes</strong> usa a entrega agendada do ntfy: os avisos das próximas horas chegam na hora certa <strong>mesmo com o app fechado</strong>. Programe antes de dormir; se registrar uma mamada fora do horário previsto, um aviso já agendado ainda pode chegar no horário antigo.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <label class="switch">
         <span>Avisar no WhatsApp</span>
         <input type="checkbox" id="waEnabled">
       </label>
