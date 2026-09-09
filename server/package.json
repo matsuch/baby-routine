@@ -1,0 +1,12 @@
+{
+  "name": "rotina-bebe-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Worker 24/7 que dispara os lembretes do Rotina do Bebe no WhatsApp (WAHA/Evolution).",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node worker.mjs",
+    "test": "node test.mjs"
+  }
+}

@@ -35,6 +35,7 @@
       <button class="quick" data-quick="mamada"><span>🍼</span>Mamada</button>
       <button class="quick" data-quick="xixi"><span>💧</span>Xixi</button>
       <button class="quick" data-quick="cocô"><span>💩</span>Cocô</button>
+      <button class="quick" data-quick="arroto"><span>💨</span>Arroto</button>
       <button class="quick" data-quick="sono"><span>😴</span><em id="quickSonoLabel">Dormiu</em></button>
     </div>
 
@@ -114,6 +115,56 @@
         <input type="checkbox" id="setNotify">
       </label>
       <p class="muted small">Os avisos só tocam com o app aberto ou em segundo plano recente. Mantenha os alarmes do celular para as madrugadas.</p>
+    </div>
+
+    <div class="card">
+      <label class="switch">
+        <span>Avisar no WhatsApp</span>
+        <input type="checkbox" id="waEnabled">
+      </label>
+      <div id="waFields" hidden>
+        <label class="field">
+          <span>Serviço (API não-oficial)</span>
+          <select id="waProvider">
+            <option value="waha">WAHA</option>
+            <option value="evolution">Evolution API</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>URL do servidor</span>
+          <input type="url" id="waBaseUrl" placeholder="https://waha.seudominio.com" autocomplete="off" inputmode="url">
+        </label>
+        <label class="field">
+          <span>Chave da API</span>
+          <input type="password" id="waApiKey" placeholder="X-Api-Key / apikey" autocomplete="off">
+        </label>
+        <label class="field">
+          <span id="waSessionLabel">Sessão</span>
+          <input type="text" id="waSession" placeholder="default" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>Números de destino</span>
+          <input type="text" id="waNumbers" placeholder="5511999998888, 5521988887777" autocomplete="off" inputmode="tel">
+        </label>
+        <label class="switch">
+          <span>Mandar junto com o aviso local</span>
+          <input type="checkbox" id="waOnReminder">
+        </label>
+        <label class="field">
+          <span>URL do worker 24/7 (opcional)</span>
+          <input type="url" id="waWorkerUrl" placeholder="https://worker.seudominio.com" autocomplete="off" inputmode="url">
+        </label>
+        <label class="field">
+          <span>Token do worker (opcional)</span>
+          <input type="password" id="waWorkerToken" placeholder="segredo compartilhado" autocomplete="off">
+        </label>
+        <div class="row-2">
+          <button class="btn btn-ghost" id="waTest" type="button">Enviar teste</button>
+          <button class="btn btn-ghost" id="waSendSummary" type="button">Enviar resumo</button>
+        </div>
+        <button class="btn btn-ghost block" id="waPush" type="button">Sincronizar agenda com o worker</button>
+        <p class="disclaimer">WAHA e Evolution são APIs <strong>não-oficiais</strong> do WhatsApp — usar por sua conta, com risco de bloqueio do número; prefira um chip dedicado. O worker 24/7 fica em <code>server/</code> e é quem envia os lembretes com o app fechado. Sem ele, o WhatsApp só sai com o app aberto.</p>
+      </div>
     </div>
 
     <div class="card">

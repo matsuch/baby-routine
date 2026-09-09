@@ -5,6 +5,7 @@ import {
   countdown, describeFeed, fmtAge, fmtDate, fmtGap, fmtMin, fmtTime,
   fromLocalInput, pad, SIDE_LABEL, toLocalInput,
 } from './format.js';
+import * as WA from './wa.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -178,6 +179,7 @@ function renderResumo(grid, resumo) {
     ['🍼', resumo.mamadas, 'mamadas'],
     ['💧', resumo.xixis, 'xixis'],
     ['💩', resumo.cocos, 'cocôs'],
+    ['💨', resumo.arrotos, 'arrotos'],
     ['😴', resumo.minutosDormindo ? fmtMin(resumo.minutosDormindo) : '0', 'sono'],
   ];
   stats.forEach(([emoji, valor, rotulo]) => {
@@ -189,7 +191,7 @@ function renderResumo(grid, resumo) {
 
 /* ================================================================ linhas de evento */
 
-const EVENTO_EMOJI = { feed: '🍼', diaper: '💧', sleep: '😴', med: '💊', note: '📝' };
+const EVENTO_EMOJI = { feed: '🍼', diaper: '💧', sleep: '😴', med: '💊', burp: '💨', note: '📝' };
 
 function tituloEvento(ev) {
   switch (ev.type) {
@@ -197,6 +199,7 @@ function tituloEvento(ev) {
     case 'diaper': return `Fralda · ${ev.kind}`;
     case 'sleep': return 'Sono';
     case 'med': return ev.name;
+    case 'burp': return 'Arroto';
     default: return 'Anotação';
   }
 }
@@ -208,6 +211,7 @@ function subtituloEvento(ev) {
       ? `${fmtMin((ev.endAt - ev.at) / MS_MIN)} · até ${fmtTime(ev.endAt)}`
       : 'em andamento';
     case 'med': return ev.dose || 'dose tomada';
+    case 'burp': return ev.ok === false ? 'sem arroto' : 'arrotou';
     case 'note': return ev.text || '';
     default: return '';
   }
@@ -496,6 +500,19 @@ function renderAjustes() {
   $('#setInterval').value = String(state.settings.feedIntervalMin);
   $('#setNotify').checked = !!state.settings.notify && Notification.permission === 'granted';
   $('#version').textContent = `Rotina do Bebê · ${state.events.length} registros salvos neste aparelho`;
+
+  const wa = state.settings.wa;
+  $('#waEnabled').checked = !!wa.enabled;
+  $('#waFields').hidden = !wa.enabled;
+  $('#waProvider').value = wa.provider;
+  $('#waBaseUrl').value = wa.baseUrl;
+  $('#waApiKey').value = wa.apiKey;
+  $('#waSession').value = wa.session;
+  $('#waNumbers').value = wa.numbers;
+  $('#waOnReminder').checked = !!wa.onReminder;
+  $('#waWorkerUrl').value = wa.workerUrl;
+  $('#waWorkerToken').value = wa.workerToken;
+  $('#waSessionLabel').textContent = wa.provider === 'evolution' ? 'Instância' : 'Sessão';
 }
 
 function baixarBackup() {
@@ -542,6 +559,16 @@ function avisar(titulo, corpo, tag) {
   vibrar([80, 60, 80]);
 }
 
+/** Envia no WhatsApp quando um aviso dispara (best-effort, só com o app aberto). */
+function avisarWhatsApp(texto) {
+  const wa = state.settings.wa;
+  if (!wa.enabled || !wa.onReminder) return;
+  const nome = state.baby.name?.trim();
+  WA.broadcast(wa, `${nome ? `${nome} · ` : ''}${texto}`).catch((err) => {
+    console.warn('WhatsApp falhou:', err.message);
+  });
+}
+
 function checarAvisos() {
   if (!state.settings.notify || Notification.permission !== 'granted') return;
   const agora = Date.now();
@@ -552,7 +579,9 @@ function checarAvisos() {
     if (!avisados.has(chave)) {
       marcarAviso(chave);
       const lado = S.nextSide();
-      avisar('Hora da mamada 🍼', lado ? `Oferecer o lado ${SIDE_LABEL[lado]}.` : 'Toque para registrar.', chave);
+      const corpo = lado ? `Oferecer o lado ${SIDE_LABEL[lado]}.` : 'Toque para registrar.';
+      avisar('Hora da mamada 🍼', corpo, chave);
+      avisarWhatsApp(`🍼 Hora da mamada. ${corpo}`);
     }
   }
 
@@ -562,7 +591,23 @@ function checarAvisos() {
     const chave = `med:${med.id}:${prox}`;
     if (avisados.has(chave)) return;
     marcarAviso(chave);
-    avisar(`Hora do ${med.name} 💊`, med.dose ? `Dose: ${med.dose}` : `A cada ${med.intervalHours}h.`, chave);
+    const corpo = med.dose ? `Dose: ${med.dose}` : `A cada ${med.intervalHours}h.`;
+    avisar(`Hora do ${med.name} 💊`, corpo, chave);
+    avisarWhatsApp(`💊 Hora do ${med.name}. ${corpo}`);
+  });
+}
+
+/** Empurra a agenda para o worker 24/7, no máximo a cada 5 min (best-effort). */
+let ultimoPush = 0;
+function sincronizarWorker(forcar = false) {
+  const wa = state.settings.wa;
+  if (!wa.enabled || !wa.workerUrl) return Promise.resolve({ skipped: true });
+  const agora = Date.now();
+  if (!forcar && agora - ultimoPush < 5 * MS_MIN) return Promise.resolve({ skipped: true });
+  ultimoPush = agora;
+  return WA.pushAgenda(wa, S.agenda(24)).catch((err) => {
+    console.warn('Sync com worker falhou:', err.message);
+    return { error: err.message };
   });
 }
 
@@ -584,6 +629,88 @@ function render() {
 function tick() {
   if (viewAtual === 'agora' || viewAtual === 'mamada' || viewAtual === 'remedios') render();
   checarAvisos();
+  sincronizarWorker();
+}
+
+/* ================================================================ WhatsApp (UI) */
+
+function lerConfigWhatsApp() {
+  const wa = state.settings.wa;
+  wa.provider = $('#waProvider').value;
+  wa.baseUrl = $('#waBaseUrl').value.trim();
+  wa.apiKey = $('#waApiKey').value.trim();
+  wa.session = $('#waSession').value.trim() || 'default';
+  wa.numbers = $('#waNumbers').value.trim();
+  wa.onReminder = $('#waOnReminder').checked;
+  wa.workerUrl = $('#waWorkerUrl').value.trim();
+  wa.workerToken = $('#waWorkerToken').value.trim();
+  S.save();
+}
+
+function ligarEventosWhatsApp() {
+  $('#waEnabled').addEventListener('change', (e) => {
+    state.settings.wa.enabled = e.target.checked;
+    $('#waFields').hidden = !e.target.checked;
+    S.save();
+  });
+
+  // Campos: salvam ao editar; provider também troca o rótulo Sessão/Instância.
+  ['waBaseUrl', 'waApiKey', 'waSession', 'waNumbers', 'waWorkerUrl', 'waWorkerToken'].forEach((id) => {
+    $(`#${id}`).addEventListener('change', lerConfigWhatsApp);
+  });
+  $('#waOnReminder').addEventListener('change', lerConfigWhatsApp);
+  $('#waProvider').addEventListener('change', () => {
+    lerConfigWhatsApp();
+    $('#waSessionLabel').textContent = state.settings.wa.provider === 'evolution' ? 'Instância' : 'Sessão';
+  });
+
+  $('#waTest').addEventListener('click', async (e) => {
+    lerConfigWhatsApp();
+    const wa = state.settings.wa;
+    const numeros = WA.parseNumbers(wa.numbers);
+    if (!wa.baseUrl || !numeros.length) { toast('Preencha URL e ao menos um número'); return; }
+    e.target.disabled = true;
+    toast('Enviando teste…');
+    try {
+      const r = await WA.broadcast(wa, '✅ Teste do Rotina do Bebê — está funcionando!');
+      toast(`Teste enviado (${r.enviados}/${r.total})`);
+    } catch (err) {
+      alert(`Falha ao enviar: ${err.message}\n\nVerifique URL, chave, sessão e o CORS do servidor.`);
+    } finally {
+      e.target.disabled = false;
+    }
+  });
+
+  $('#waSendSummary').addEventListener('click', async (e) => {
+    lerConfigWhatsApp();
+    const wa = state.settings.wa;
+    if (!wa.baseUrl || !WA.parseNumbers(wa.numbers).length) { toast('Preencha URL e ao menos um número'); return; }
+    e.target.disabled = true;
+    toast('Enviando resumo…');
+    try {
+      const r = await WA.broadcast(wa, textoResumo());
+      toast(`Resumo enviado (${r.enviados}/${r.total})`);
+    } catch (err) {
+      alert(`Falha ao enviar: ${err.message}`);
+    } finally {
+      e.target.disabled = false;
+    }
+  });
+
+  $('#waPush').addEventListener('click', async (e) => {
+    lerConfigWhatsApp();
+    if (!state.settings.wa.workerUrl) { toast('Informe a URL do worker 24/7'); return; }
+    e.target.disabled = true;
+    toast('Sincronizando…');
+    try {
+      await sincronizarWorker(true);
+      toast('Agenda enviada ao worker');
+    } catch (err) {
+      alert(`Falha ao sincronizar: ${err.message}`);
+    } finally {
+      e.target.disabled = false;
+    }
+  });
 }
 
 /* ================================================================ eventos de UI */
@@ -601,6 +728,9 @@ function ligarEventos() {
     } else if (acao === 'xixi' || acao === 'cocô') {
       S.addEvent({ type: 'diaper', kind: acao });
       toast(`${acao === 'xixi' ? 'Xixi' : 'Cocô'} registrado`);
+    } else if (acao === 'arroto') {
+      S.addEvent({ type: 'burp', ok: true });
+      toast('Arroto registrado 💨');
     } else if (acao === 'sono') {
       const fim = S.toggleSleep();
       toast(fim ? `Acordou · dormiu ${fmtMin((fim.endAt - fim.at) / MS_MIN)}` : 'Sono iniciado');
@@ -631,6 +761,8 @@ function ligarEventos() {
   $('#dayNext').addEventListener('click', () => { if (diaDiario < 0) { diaDiario += 1; render(); } });
   $('#btnAgenda').addEventListener('click', sheetAgenda);
   $('#btnResumo').addEventListener('click', () => copiar(textoResumo()));
+
+  ligarEventosWhatsApp();
 
   $('#setName').addEventListener('input', (e) => { state.baby.name = e.target.value; S.save(); });
   $('#setBirth').addEventListener('change', (e) => { state.baby.birth = e.target.value; S.save(); });
