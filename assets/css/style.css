@@ -96,7 +96,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .btn-danger { background: transparent; color: var(--danger); border-color: #4a2b2b; }
 .btn.block { display: block; width: 100%; margin-top: 12px; }
 
-.quick-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.quick-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(62px, 1fr)); gap: 8px; }
 .quick {
   background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
   padding: 14px 4px; display: grid; gap: 6px; justify-items: center;
@@ -106,7 +106,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .quick em { font-style: normal; }
 
 /* ---------- resumo do dia ---------- */
-.today-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.today-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(60px, 1fr)); gap: 8px; }
 .stat {
   background: var(--card); border: 1px solid var(--line); border-radius: 14px;
   padding: 12px 6px; text-align: center;

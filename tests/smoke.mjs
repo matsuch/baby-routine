@@ -69,13 +69,19 @@ try {
   await page.click('#sheetBody button[type="submit"]');
   checar(await page.locator('#feedList .item').count() === 2, 'mamada manual não entrou na lista');
 
-  // registros rápidos
+  // registros rápidos (inclui arroto)
   await page.click('.tab[data-view="agora"]');
   await page.click('.quick[data-quick="xixi"]');
   await page.click('.quick[data-quick="cocô"]');
+  await page.click('.quick[data-quick="arroto"]');
   await page.click('.quick[data-quick="sono"]');
   checar((await page.textContent('#quickSonoLabel')).trim() === 'Acordou', 'botão de sono não virou "Acordou"');
   await page.click('.quick[data-quick="sono"]');
+  const arrotos = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('rotina-bebe:v1')).events.filter((e) => e.type === 'burp').length);
+  checar(arrotos === 1, `esperava 1 arroto registrado, achei ${arrotos}`);
+  checar((await page.locator('#todayGrid .stat').allTextContents()).some((t) => t.includes('arrotos')),
+    'resumo do dia não mostra arrotos');
 
   // remédios
   await page.click('.tab[data-view="remedios"]');
@@ -103,6 +109,33 @@ try {
   await shot('diario.png');
   await page.click('.tab[data-view="agora"]');
   await shot('agora.png');
+
+  // config de WhatsApp: liga, preenche e testa o "Enviar teste" (fetch stubado)
+  await page.click('.tab[data-view="ajustes"]');
+  await page.check('#waEnabled');
+  checar(!(await page.locator('#waFields').isHidden()), 'campos de WhatsApp não apareceram ao ligar');
+  await page.selectOption('#waProvider', 'waha');
+  await page.fill('#waBaseUrl', 'https://waha.exemplo.com');
+  await page.fill('#waApiKey', 'chave-secreta');
+  await page.fill('#waSession', 'default');
+  await page.fill('#waNumbers', '5511999998888');
+  await page.evaluate(() => {
+    window.__wa = [];
+    window.fetch = async (url, opts) => {
+      window.__wa.push({ url, body: JSON.parse(opts.body), headers: opts.headers });
+      return { ok: true, status: 200, json: async () => ({}), text: async () => '' };
+    };
+  });
+  await page.click('#waTest');
+  await page.waitForFunction(() => window.__wa && window.__wa.length > 0, { timeout: 4000 });
+  const chamada = await page.evaluate(() => window.__wa[0]);
+  checar(chamada.url === 'https://waha.exemplo.com/api/sendText', `URL do WAHA errada: ${chamada.url}`);
+  checar(chamada.body.chatId === '5511999998888@c.us', `chatId errado: ${chamada.body.chatId}`);
+  checar(chamada.headers['X-Api-Key'] === 'chave-secreta', 'X-Api-Key não foi enviado');
+  const waSalvo = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('rotina-bebe:v1')).settings.wa);
+  checar(waSalvo.enabled === true && waSalvo.baseUrl === 'https://waha.exemplo.com',
+    'config de WhatsApp não persistiu');
 
   // persistência e service worker
   const antes = await page.evaluate(() => JSON.parse(localStorage.getItem('rotina-bebe:v1')).events.length);

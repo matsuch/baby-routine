@@ -1,0 +1,39 @@
+# Sobe o WAHA (WhatsApp HTTP API não-oficial) + o worker do Rotina do Bebê.
+# Rode a partir da RAIZ do repositório:
+#   docker compose -f server/docker-compose.yml up -d
+#
+# Para usar a Evolution API no lugar do WAHA, veja server/README.md.
+
+services:
+  waha:
+    image: devlikeapro/waha:latest
+    restart: unless-stopped
+    ports:
+      - "3001:3000"            # painel/API do WAHA -> http://SEU_HOST:3001
+    environment:
+      # Protege a API do WAHA. Use o MESMO valor no campo "Chave da API" do app.
+      WAHA_API_KEY: ${WAHA_API_KEY:?defina WAHA_API_KEY no .env}
+      WHATSAPP_DEFAULT_ENGINE: WEBJS
+    volumes:
+      - waha-sessions:/app/.sessions
+
+  worker:
+    build:
+      context: ..                # raiz do repo (precisa do assets/js/wa.js)
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"            # worker -> http://SEU_HOST:3000
+    environment:
+      PORT: 3000
+      WORKER_TOKEN: ${WORKER_TOKEN:-}      # opcional; se setar, use o mesmo no app
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}       # em produção, a URL do seu GitHub Pages
+      WINDOW_MIN: ${WINDOW_MIN:-8}
+    volumes:
+      - worker-data:/app/server/data
+    depends_on:
+      - waha
+
+volumes:
+  waha-sessions:
+  worker-data:

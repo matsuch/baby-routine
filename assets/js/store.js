@@ -21,7 +21,23 @@ function estadoInicial() {
   return {
     version: 1,
     baby: { name: '', birth: '' },
-    settings: { feedIntervalMin: 180, notify: false },
+    settings: {
+      feedIntervalMin: 180,
+      notify: false,
+      // Integração com WhatsApp via API não-oficial (WAHA ou Evolution).
+      wa: {
+        enabled: false,
+        provider: 'waha',   // 'waha' | 'evolution'
+        baseUrl: '',        // ex.: https://waha.seudominio.com
+        apiKey: '',         // X-Api-Key (WAHA) ou apikey (Evolution)
+        session: 'default', // sessão (WAHA) ou nome da instância (Evolution)
+        numbers: '',        // destinos, separados por vírgula (DDI+DDD+número)
+        onReminder: true,   // manda no WhatsApp junto do aviso local
+        // URL do worker 24/7 (server/) que recebe a agenda e dispara na madrugada
+        workerUrl: '',
+        workerToken: '', // segredo compartilhado com o worker (header x-worker-token)
+      },
+    },
     meds: MEDS_PADRAO.map((m) => ({ id: uid(), active: true, ...m })),
     events: [],
     activeFeed: null,   // { startAt, side, segments: [{side, min}] }
@@ -34,6 +50,7 @@ function migrar(dados) {
   const s = { ...base, ...dados };
   s.baby = { ...base.baby, ...(dados.baby || {}) };
   s.settings = { ...base.settings, ...(dados.settings || {}) };
+  s.settings.wa = { ...base.settings.wa, ...((dados.settings || {}).wa || {}) };
   s.meds = Array.isArray(dados.meds) ? dados.meds : base.meds;
   s.events = Array.isArray(dados.events) ? dados.events : [];
   return s;
@@ -220,6 +237,7 @@ export function daySummary(ref = new Date()) {
     minutosMamando: feeds.reduce((t, e) => t + (e.durationMin || 0), 0),
     xixis: fraldas.filter((e) => e.kind !== 'cocô').length,
     cocos: fraldas.filter((e) => e.kind !== 'xixi').length,
+    arrotos: eventos.filter((e) => e.type === 'burp').length,
     remedios: eventos.filter((e) => e.type === 'med').length,
     minutosDormindo: sonos.reduce((t, e) => t + Math.round((e.endAt - e.at) / MS_MIN), 0),
   };
