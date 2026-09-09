@@ -23,6 +23,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+        # Liga o Pages sozinho na primeira execução, sem precisar mexer em Settings.
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .
