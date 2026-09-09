@@ -128,9 +128,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .item-del { border: 0; background: none; color: var(--muted); font-size: 16px; padding: 4px 2px; cursor: pointer; }
 .empty { color: var(--muted); text-align: center; padding: 24px 8px; font-size: 14px; }
 
-/* ---------- timer de mamada ---------- */
+/* ---------- timer de mamada / arroto ---------- */
 .timer-card { text-align: center; }
+.timer-card.is-done { border-color: var(--diaper); background: #16241d; }
 .timer { font-size: 56px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -1px; margin: 6px 0 14px; }
+.timer-card.is-done .timer { color: var(--diaper); }
+.burp-meta { margin: -6px 0 12px; font-size: 13px; color: var(--muted); }
+.burp-meta.is-done { color: var(--diaper); font-weight: 600; }
 .side-row { display: flex; gap: 10px; }
 .side-btn {
   flex: 1; padding: 18px 8px; border-radius: 16px; cursor: pointer;

@@ -19,8 +19,11 @@ const TITULOS = {
   ajustes: 'Ajustes',
 };
 
+const BURP_TARGET_MIN = 20; // meta do cronômetro de arroto
+
 let viewAtual = 'agora';
 let diaDiario = 0; // 0 = hoje, -1 = ontem...
+let burpAvisado = false; // já avisou que a meta de arroto foi atingida?
 
 /* ================================================================ utilidades */
 
@@ -93,9 +96,43 @@ function cartaoProximo({ emoji, titulo, sub, at, onClick }) {
   return card;
 }
 
+/** Card com o cronômetro de arroto, no topo do Agora enquanto está ativo. */
+function cardArroto() {
+  const b = state.activeBurp;
+  const decorrido = Date.now() - b.startAt;
+  const min = Math.floor(decorrido / MS_MIN);
+  const seg = Math.floor(decorrido / 1000) % 60;
+  const atingiu = min >= BURP_TARGET_MIN;
+
+  const card = el('div', 'card timer-card');
+  if (atingiu) card.classList.add('is-done');
+  card.append(el('p', 'muted', `Arroto · começou ${fmtTime(b.startAt)} · meta ${BURP_TARGET_MIN} min`));
+  card.append(el('div', 'timer', `${pad(min)}:${pad(seg)}`));
+  card.append(el('p', atingiu ? 'burp-meta is-done' : 'burp-meta',
+    atingiu ? '✅ Meta de 20 min atingida' : `Faltam ${fmtMin(BURP_TARGET_MIN - min)}`));
+
+  const linha = el('div', 'row-2');
+  const fim = el('button', 'btn btn-primary', 'Finalizar arroto');
+  fim.addEventListener('click', () => {
+    const ev = S.finishBurp();
+    burpAvisado = false;
+    vibrar();
+    if (ev) toast(`Arroto de ${fmtMin(ev.durationMin)} registrado`);
+  });
+  const cancelar = el('button', 'btn btn-ghost', 'Cancelar');
+  cancelar.addEventListener('click', () => {
+    if (confirm('Cancelar este arroto sem registrar?')) { S.cancelBurp(); burpAvisado = false; }
+  });
+  linha.append(fim, cancelar);
+  card.append(linha);
+  return card;
+}
+
 function renderAgora() {
   const cards = $('#nextCards');
   cards.innerHTML = '';
+
+  if (state.activeBurp) cards.append(cardArroto());
 
   // — próxima mamada —
   const proxima = S.nextFeedAt();
@@ -160,6 +197,7 @@ function renderAgora() {
   }
 
   $('#quickSonoLabel').textContent = state.activeSleep ? 'Acordou' : 'Dormiu';
+  $('#quickArrotoLabel').textContent = state.activeBurp ? 'Encerrar' : 'Arroto';
 
   renderResumo($('#todayGrid'), S.daySummary());
 
@@ -212,7 +250,7 @@ function subtituloEvento(ev) {
       ? `${fmtMin((ev.endAt - ev.at) / MS_MIN)} · até ${fmtTime(ev.endAt)}`
       : 'em andamento';
     case 'med': return ev.dose || 'dose tomada';
-    case 'burp': return ev.ok === false ? 'sem arroto' : 'arrotou';
+    case 'burp': return ev.durationMin ? `${fmtMin(ev.durationMin)} no colo` : 'arrotou';
     case 'note': return ev.text || '';
     default: return '';
   }
@@ -685,9 +723,26 @@ function render() {
   else if (viewAtual === 'ajustes') renderAjustes();
 }
 
+/** Avisa (uma vez) quando o cronômetro de arroto atinge a meta de 20 min. */
+function checarMetaArroto() {
+  if (!state.activeBurp) { burpAvisado = false; return; }
+  const min = (Date.now() - state.activeBurp.startAt) / MS_MIN;
+  if (min >= BURP_TARGET_MIN && !burpAvisado) {
+    burpAvisado = true;
+    vibrar([120, 80, 120]);
+    if (state.settings.notify && Notification.permission === 'granted') {
+      avisar('Arroto: 20 min ✅', 'Meta de arroto atingida — pode encerrar quando quiser.', 'burp-meta');
+    }
+    avisarWhatsApp('💨 Arroto: 20 min completos.');
+    avisarNtfy('💨 Arroto: 20 min completos.');
+    if (viewAtual !== 'agora') toast('Arroto: 20 min atingidos ✅');
+  }
+}
+
 function tick() {
   if (viewAtual === 'agora' || viewAtual === 'mamada' || viewAtual === 'remedios') render();
   checarAvisos();
+  checarMetaArroto();
   sincronizarWorker();
 }
 
@@ -853,8 +908,15 @@ function ligarEventos() {
       S.addEvent({ type: 'diaper', kind: acao });
       toast(`${acao === 'xixi' ? 'Xixi' : 'Cocô'} registrado`);
     } else if (acao === 'arroto') {
-      S.addEvent({ type: 'burp', ok: true });
-      toast('Arroto registrado 💨');
+      if (state.activeBurp) {
+        const ev = S.finishBurp();
+        burpAvisado = false;
+        if (ev) toast(`Arroto de ${fmtMin(ev.durationMin)} registrado`);
+      } else {
+        S.startBurp();
+        burpAvisado = false;
+        toast(`Cronômetro de arroto iniciado — meta ${BURP_TARGET_MIN} min`);
+      }
     } else if (acao === 'sono') {
       const fim = S.toggleSleep();
       toast(fim ? `Acordou · dormiu ${fmtMin((fim.endAt - fim.at) / MS_MIN)}` : 'Sono iniciado');

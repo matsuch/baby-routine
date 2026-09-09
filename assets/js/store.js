@@ -49,6 +49,7 @@ function estadoInicial() {
     events: [],
     activeFeed: null,   // { startAt, side, segments: [{side, min}] }
     activeSleep: null,  // { startAt }
+    activeBurp: null,   // { startAt } — cronômetro de arroto
   };
 }
 
@@ -189,6 +190,32 @@ export function toggleSleep() {
   state.activeSleep = { startAt: Date.now() };
   save();
   return null;
+}
+
+/* ------------------------------------------------------------------ arroto */
+export function startBurp() {
+  if (state.activeBurp) return;
+  state.activeBurp = { startAt: Date.now() };
+  save();
+}
+
+export function finishBurp() {
+  const b = state.activeBurp;
+  if (!b) return null;
+  const agora = Date.now();
+  state.activeBurp = null;
+  return addEvent({
+    type: 'burp',
+    at: b.startAt,
+    endAt: agora,
+    durationMin: Math.max(1, Math.round((agora - b.startAt) / MS_MIN)),
+    ok: true,
+  });
+}
+
+export function cancelBurp() {
+  state.activeBurp = null;
+  save();
 }
 
 /* ------------------------------------------------------------------ remédios */

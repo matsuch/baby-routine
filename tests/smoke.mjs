@@ -69,17 +69,27 @@ try {
   await page.click('#sheetBody button[type="submit"]');
   checar(await page.locator('#feedList .item').count() === 2, 'mamada manual não entrou na lista');
 
-  // registros rápidos (inclui arroto)
+  // registros rápidos
   await page.click('.tab[data-view="agora"]');
   await page.click('.quick[data-quick="xixi"]');
   await page.click('.quick[data-quick="cocô"]');
-  await page.click('.quick[data-quick="arroto"]');
   await page.click('.quick[data-quick="sono"]');
   checar((await page.textContent('#quickSonoLabel')).trim() === 'Acordou', 'botão de sono não virou "Acordou"');
   await page.click('.quick[data-quick="sono"]');
-  const arrotos = await page.evaluate(() =>
-    JSON.parse(localStorage.getItem('rotina-bebe:v1')).events.filter((e) => e.type === 'burp').length);
-  checar(arrotos === 1, `esperava 1 arroto registrado, achei ${arrotos}`);
+
+  // arroto agora é um cronômetro: inicia -> mostra timer -> finaliza -> registra duração
+  await page.click('.quick[data-quick="arroto"]');
+  checar((await page.textContent('#quickArrotoLabel')).trim() === 'Encerrar',
+    'botão de arroto não virou "Encerrar" ao iniciar o timer');
+  checar(await page.locator('#view-agora .timer-card .timer').count() === 1, 'timer de arroto não apareceu');
+  await page.waitForTimeout(1100);
+  await page.click('#view-agora .timer-card .btn-primary'); // Finalizar arroto
+  const burps = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('rotina-bebe:v1')).events.filter((e) => e.type === 'burp'));
+  checar(burps.length === 1 && burps[0].durationMin >= 1 && burps[0].endAt > burps[0].at,
+    `arroto não registrou duração: ${JSON.stringify(burps)}`);
+  checar((await page.textContent('#quickArrotoLabel')).trim() === 'Arroto',
+    'botão de arroto não voltou para "Arroto" após finalizar');
   checar((await page.locator('#todayGrid .stat').allTextContents()).some((t) => t.includes('arrotos')),
     'resumo do dia não mostra arrotos');
 
