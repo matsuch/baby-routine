@@ -33,11 +33,12 @@ acertar os horários. O app serve para saber *quanto falta* e *o que já foi fei
 
 ## Publicar de graça (GitHub Pages)
 
-O repositório já vem com o workflow `.github/workflows/pages.yml`. Depois de dar
-merge na branch principal:
+O repositório já vem com o workflow `.github/workflows/pages.yml`, que liga o Pages
+sozinho (`enablement: true`) no primeiro push na branch principal. O app fica em
+`https://<seu-usuario>.github.io/baby-routine/`.
 
-1. No GitHub: **Settings → Pages → Source: GitHub Actions**.
-2. O app fica em `https://<seu-usuario>.github.io/baby-routine/`.
+Se o deploy falhar com *"Get Pages site failed"*, ative uma vez à mão em
+**Settings → Pages → Source: GitHub Actions** e rode o workflow de novo.
 
 Como é tudo estático, também funciona em qualquer hospedagem de arquivos.
 
