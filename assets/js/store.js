@@ -37,6 +37,13 @@ function estadoInicial() {
         workerUrl: '',
         workerToken: '', // segredo compartilhado com o worker (header x-worker-token)
       },
+      // Notificações push simples via ntfy.sh (sem servidor próprio).
+      ntfy: {
+        enabled: false,
+        server: 'https://ntfy.sh',
+        topic: '',          // tópico secreto; qualquer um que souber recebe os avisos
+        onReminder: true,   // manda um push quando o aviso dispara (app aberto)
+      },
     },
     meds: MEDS_PADRAO.map((m) => ({ id: uid(), active: true, ...m })),
     events: [],
@@ -51,6 +58,7 @@ function migrar(dados) {
   s.baby = { ...base.baby, ...(dados.baby || {}) };
   s.settings = { ...base.settings, ...(dados.settings || {}) };
   s.settings.wa = { ...base.settings.wa, ...((dados.settings || {}).wa || {}) };
+  s.settings.ntfy = { ...base.settings.ntfy, ...((dados.settings || {}).ntfy || {}) };
   s.meds = Array.isArray(dados.meds) ? dados.meds : base.meds;
   s.events = Array.isArray(dados.events) ? dados.events : [];
   return s;

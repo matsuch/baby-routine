@@ -17,7 +17,26 @@ tudo no próprio celular** (nenhum dado sai do aparelho, nenhuma conta, nenhum s
 | **Diário** | Linha do tempo do dia, resumo (mamadas, fraldas, arrotos, sono) e **"Copiar resumo"** para mandar no WhatsApp ou mostrar no pediatra. **"Agenda do dia"** projeta os horários das próximas 24h — útil para conferir ou recriar os alarmes do celular. |
 | **Ajustes** | Nome e nascimento do bebê, intervalo entre mamadas, avisos, **notificações no WhatsApp** e backup dos dados. |
 
-## Notificações no WhatsApp (opcional)
+## Notificações push pelo ntfy (recomendado — simples, sem servidor)
+
+A forma mais fácil de receber os avisos como **push**, inclusive de madrugada, é o
+[**ntfy**](https://ntfy.sh) — grátis, open-source, sem conta e sem servidor próprio.
+
+1. Instale o app **ntfy** ([iOS](https://apps.apple.com/app/ntfy/id1625396347) /
+   [Android](https://play.google.com/store/apps/details?id=io.heckel.ntfy)).
+2. No Rotina do Bebê: **Ajustes → Push pelo ntfy** → ligue. O app já sugere um
+   **tópico** aleatório (ex.: `rotina-bebe-x7k9m2`).
+3. No app ntfy, assine **o mesmo tópico** (o parceiro(a) pode assinar também, no
+   celular dele). Toque em **Enviar teste** para conferir.
+4. Antes de dormir, toque em **Programar lembretes da noite** — o ntfy usa
+   **entrega agendada** e dispara os avisos na hora certa **mesmo com o app fechado**.
+
+> O tópico é **público para quem souber o nome** — use um nome aleatório e não o
+> compartilhe. Registrar uma mamada fora do horário previsto pode fazer um aviso já
+> agendado chegar no horário antigo (o ntfy não cancela agendados); por isso o botão
+> é para programar a noite pouco antes de dormir.
+
+## Notificações no WhatsApp (opcional, mais trabalhoso)
 
 Em **Ajustes → Avisar no WhatsApp** dá para mandar os lembretes de mamada e remédio
 (e o resumo do dia) para o seu WhatsApp e o do parceiro(a), usando uma API
@@ -46,9 +65,11 @@ O passo a passo de instalação numa VPS (Docker + WAHA/Evolution + HTTPS) está
 ### Sobre os avisos ⚠️
 
 O sininho no topo liga as notificações, mas **navegador só avisa com o app aberto ou
-há pouco tempo em segundo plano** — no iPhone isso é ainda mais limitado. Para a
-madrugada, **continue usando os alarmes do celular**; use a *Agenda do dia* para
-acertar os horários. O app serve para saber *quanto falta* e *o que já foi feito*.
+há pouco tempo em segundo plano** — no iPhone isso é ainda mais limitado. Para
+receber avisos com o app fechado (madrugada), use o **push pelo ntfy** (acima) e o
+botão *Programar lembretes da noite*. Como rede de segurança, vale manter também os
+**alarmes do celular**; a *Agenda do dia* ajuda a acertar os horários. O app em si
+serve para saber *quanto falta* e *o que já foi feito*.
 
 ## Publicar de graça (GitHub Pages)
 
@@ -80,6 +101,7 @@ assets/css/style.css       tema escuro, botões grandes para uso com uma mão
 assets/js/store.js         estado + localStorage; eventos são a fonte da verdade
 assets/js/format.js        formatação de horas, durações e contagens regressivas
 assets/js/app.js           renderização das telas, interações e avisos
+assets/js/ntfy.js          push simples via ntfy.sh (imediato e agendado)
 assets/js/wa.js            adaptador de WhatsApp (WAHA/Evolution) — usado no app e no worker
 sw.js                      service worker (abre offline)
 tools/make_icons.py        gera os ícones PNG sem dependências

@@ -137,6 +137,31 @@ try {
   checar(waSalvo.enabled === true && waSalvo.baseUrl === 'https://waha.exemplo.com',
     'config de WhatsApp não persistiu');
 
+  // config de ntfy: liga (gera tópico), testa envio e programa lembretes (fetch stubado)
+  await page.check('#ntfyEnabled');
+  checar(!(await page.locator('#ntfyFields').isHidden()), 'campos de ntfy não apareceram ao ligar');
+  const topicoGerado = await page.inputValue('#ntfyTopic');
+  checar(/^rotina-bebe-/.test(topicoGerado), `tópico não foi sugerido: "${topicoGerado}"`);
+  await page.evaluate(() => {
+    window.__ntfy = [];
+    window.fetch = async (url, opts) => {
+      window.__ntfy.push({ url, body: opts.body, headers: opts.headers });
+      return { ok: true, status: 200, json: async () => ({}), text: async () => '' };
+    };
+  });
+  await page.click('#ntfyTest');
+  await page.waitForFunction(() => window.__ntfy && window.__ntfy.length > 0, { timeout: 4000 });
+  const push = await page.evaluate(() => window.__ntfy[0]);
+  checar(push.url === `https://ntfy.sh/${topicoGerado}`, `URL do ntfy errada: ${push.url}`);
+  checar(typeof push.body === 'string' && push.body.includes('Teste'), 'corpo do push errado');
+  // programar lembretes -> usa entrega agendada (header Delay presente)
+  await page.evaluate(() => { window.__ntfy = []; });
+  await page.click('#ntfySchedule');
+  await page.waitForFunction(() => window.__ntfy && window.__ntfy.length > 0, { timeout: 4000 });
+  const agendados = await page.evaluate(() => window.__ntfy);
+  checar(agendados.every((c) => c.headers.Delay && Number(c.headers.Delay) > 0),
+    'lembrete programado sem header Delay (entrega agendada)');
+
   // persistência e service worker
   const antes = await page.evaluate(() => JSON.parse(localStorage.getItem('rotina-bebe:v1')).events.length);
   await page.reload({ waitUntil: 'networkidle' });
