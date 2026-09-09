@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rotina do Bebê</title>
+<meta name="description" content="Mamadas, remédios, fraldas e sono do recém-nascido. Funciona offline no celular.">
+<meta name="theme-color" content="#0b0f16">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Rotina">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./assets/icons/apple-touch-icon.png">
+<link rel="icon" href="./assets/icons/icon-192.png">
+<link rel="stylesheet" href="./assets/css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div>
+    <h1 id="topTitle">Agora</h1>
+    <p class="topbar-sub" id="topSub">—</p>
+  </div>
+  <button class="icon-btn" id="btnNotify" type="button" title="Ativar avisos" aria-label="Ativar avisos">🔔</button>
+</header>
+
+<main id="main">
+
+  <!-- ============ AGORA ============ -->
+  <section class="view" id="view-agora">
+    <div id="nextCards" class="stack"></div>
+
+    <h2 class="section-title">Registrar rápido</h2>
+    <div class="quick-grid">
+      <button class="quick" data-quick="mamada"><span>🍼</span>Mamada</button>
+      <button class="quick" data-quick="xixi"><span>💧</span>Xixi</button>
+      <button class="quick" data-quick="cocô"><span>💩</span>Cocô</button>
+      <button class="quick" data-quick="sono"><span>😴</span><em id="quickSonoLabel">Dormiu</em></button>
+    </div>
+
+    <h2 class="section-title">Hoje</h2>
+    <div class="today-grid" id="todayGrid"></div>
+
+    <h2 class="section-title">Últimos registros</h2>
+    <div class="stack" id="recentList"></div>
+  </section>
+
+  <!-- ============ MAMADA ============ -->
+  <section class="view" id="view-mamada" hidden>
+    <div class="card timer-card">
+      <p class="muted" id="feedHint">—</p>
+      <div class="timer" id="feedTimer">00:00</div>
+      <div class="side-row">
+        <button class="side-btn" data-side="E" type="button">Esquerdo</button>
+        <button class="side-btn" data-side="D" type="button">Direito</button>
+      </div>
+      <div class="row-2">
+        <button class="btn btn-primary" id="btnFeedFinish" type="button" hidden>Finalizar mamada</button>
+        <button class="btn btn-ghost" id="btnFeedCancel" type="button" hidden>Cancelar</button>
+      </div>
+      <button class="btn btn-ghost" id="btnFeedManual" type="button">Registrar mamada passada</button>
+    </div>
+
+    <h2 class="section-title">Mamadas de hoje</h2>
+    <div class="stack" id="feedList"></div>
+  </section>
+
+  <!-- ============ REMÉDIOS ============ -->
+  <section class="view" id="view-remedios" hidden>
+    <div class="stack" id="medList"></div>
+    <button class="btn btn-ghost block" id="btnAddMed" type="button">+ Adicionar remédio</button>
+    <p class="disclaimer">Este app só lembra os horários que você configurou. Dose, intervalo e duração do tratamento são os da prescrição médica.</p>
+  </section>
+
+  <!-- ============ DIÁRIO ============ -->
+  <section class="view" id="view-diario" hidden>
+    <div class="day-nav">
+      <button class="icon-btn" id="dayPrev" type="button" aria-label="Dia anterior">‹</button>
+      <strong id="dayLabel">Hoje</strong>
+      <button class="icon-btn" id="dayNext" type="button" aria-label="Próximo dia">›</button>
+    </div>
+    <div class="today-grid" id="dayGrid"></div>
+    <div class="row-2">
+      <button class="btn btn-ghost" id="btnAgenda" type="button">Agenda do dia</button>
+      <button class="btn btn-ghost" id="btnResumo" type="button">Copiar resumo</button>
+    </div>
+    <h2 class="section-title">Linha do tempo</h2>
+    <div class="stack" id="timeline"></div>
+  </section>
+
+  <!-- ============ AJUSTES ============ -->
+  <section class="view" id="view-ajustes" hidden>
+    <div class="card">
+      <label class="field">
+        <span>Nome do bebê</span>
+        <input type="text" id="setName" placeholder="Bebê" autocomplete="off">
+      </label>
+      <label class="field">
+        <span>Data de nascimento</span>
+        <input type="date" id="setBirth">
+      </label>
+      <label class="field">
+        <span>Intervalo entre mamadas</span>
+        <select id="setInterval">
+          <option value="120">2 horas</option>
+          <option value="150">2h30</option>
+          <option value="180">3 horas</option>
+          <option value="210">3h30</option>
+          <option value="240">4 horas</option>
+        </select>
+      </label>
+      <label class="switch">
+        <span>Avisar quando chegar a hora</span>
+        <input type="checkbox" id="setNotify">
+      </label>
+      <p class="muted small">Os avisos só tocam com o app aberto ou em segundo plano recente. Mantenha os alarmes do celular para as madrugadas.</p>
+    </div>
+
+    <div class="card">
+      <h3>Backup</h3>
+      <p class="muted small">Tudo fica salvo só neste aparelho. Exporte de vez em quando ou para passar os dados para o outro celular.</p>
+      <div class="row-2">
+        <button class="btn btn-ghost" id="btnExport" type="button">Exportar</button>
+        <button class="btn btn-ghost" id="btnImport" type="button">Importar</button>
+      </div>
+      <input type="file" id="fileImport" accept="application/json" hidden>
+      <button class="btn btn-danger block" id="btnWipe" type="button">Apagar todos os dados</button>
+    </div>
+    <p class="muted small center" id="version">—</p>
+  </section>
+</main>
+
+<nav class="tabbar">
+  <button class="tab is-active" data-view="agora"><span>🏠</span>Agora</button>
+  <button class="tab" data-view="mamada"><span>🍼</span>Mamada</button>
+  <button class="tab" data-view="remedios"><span>💊</span>Remédios</button>
+  <button class="tab" data-view="diario"><span>📔</span>Diário</button>
+  <button class="tab" data-view="ajustes"><span>⚙️</span>Ajustes</button>
+</nav>
+
+<div class="sheet-backdrop" id="sheetBackdrop" hidden>
+  <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <div class="sheet-head">
+      <h2 id="sheetTitle">—</h2>
+      <button class="icon-btn" id="sheetClose" type="button" aria-label="Fechar">✕</button>
+    </div>
+    <div id="sheetBody"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script type="module" src="./assets/js/app.js"></script>
+</body>
+</html>
