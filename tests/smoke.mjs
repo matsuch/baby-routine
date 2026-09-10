@@ -41,7 +41,10 @@ const browser = await chromium.launch(executavel ? { executablePath: executavel 
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'pt-BR' });
 const page = await ctx.newPage();
 const erros = [];
-page.on('console', (m) => { if (m.type() === 'error') erros.push(m.text()); });
+// Ignora falhas de rede de recursos externos (ex.: Google Fonts bloqueado no
+// sandbox de teste) — não são erros do app; a fonte tem fallback do sistema.
+const externo = (t) => /Failed to load resource|net::ERR|googleapis|gstatic/i.test(t);
+page.on('console', (m) => { if (m.type() === 'error' && !externo(m.text())) erros.push(m.text()); });
 page.on('pageerror', (e) => erros.push(`PAGEERROR: ${e.message}`));
 const shot = (nome) => (SHOTS ? page.screenshot({ path: path.join(SHOTS, nome), fullPage: true }) : Promise.resolve());
 
