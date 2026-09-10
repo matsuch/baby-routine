@@ -7,6 +7,7 @@ import {
 } from './format.js';
 import * as WA from './wa.js';
 import * as NTFY from './ntfy.js';
+import * as SYNC from './sync.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -204,7 +205,7 @@ function renderAgora() {
   // — últimos registros —
   const recentes = $('#recentList');
   recentes.innerHTML = '';
-  const ultimos = [...state.events].slice(-6).reverse();
+  const ultimos = state.events.filter((e) => !e.deleted).slice(-6).reverse();
   if (!ultimos.length) {
     recentes.append(el('p', 'empty', 'Ainda nada registrado hoje.'));
   } else {
@@ -533,32 +534,60 @@ function sheetAgenda() {
 
 /* ================================================================ AJUSTES */
 
+// Preenche um campo sem pisar no que o usuário está digitando (evita que um
+// render disparado por sync/save sobrescreva a caixa em foco).
+function setVal(sel, val) {
+  const elm = $(sel);
+  if (elm && document.activeElement !== elm) elm.value = val;
+}
+
 function renderAjustes() {
-  $('#setName').value = state.baby.name || '';
-  $('#setBirth').value = state.baby.birth || '';
+  setVal('#setName', state.baby.name || '');
+  setVal('#setBirth', state.baby.birth || '');
   $('#setInterval').value = String(state.settings.feedIntervalMin);
   $('#setNotify').checked = !!state.settings.notify && Notification.permission === 'granted';
-  $('#version').textContent = `Rotina do Bebê · ${state.events.length} registros salvos neste aparelho`;
+  const totalRegistros = state.events.filter((e) => !e.deleted).length;
+  $('#version').textContent = `Rotina do Bebê · ${totalRegistros} registros`;
+
+  $('#syncEnabled').checked = SYNC.isEnabled();
+  $('#syncFields').hidden = !SYNC.isEnabled();
+  setVal('#syncCode', SYNC.getCode());
+  renderSyncStatus();
 
   const wa = state.settings.wa;
   $('#waEnabled').checked = !!wa.enabled;
   $('#waFields').hidden = !wa.enabled;
   $('#waProvider').value = wa.provider;
-  $('#waBaseUrl').value = wa.baseUrl;
-  $('#waApiKey').value = wa.apiKey;
-  $('#waSession').value = wa.session;
-  $('#waNumbers').value = wa.numbers;
+  setVal('#waBaseUrl', wa.baseUrl);
+  setVal('#waApiKey', wa.apiKey);
+  setVal('#waSession', wa.session);
+  setVal('#waNumbers', wa.numbers);
   $('#waOnReminder').checked = !!wa.onReminder;
-  $('#waWorkerUrl').value = wa.workerUrl;
-  $('#waWorkerToken').value = wa.workerToken;
+  setVal('#waWorkerUrl', wa.workerUrl);
+  setVal('#waWorkerToken', wa.workerToken);
   $('#waSessionLabel').textContent = wa.provider === 'evolution' ? 'Instância' : 'Sessão';
 
   const ntfy = state.settings.ntfy;
   $('#ntfyEnabled').checked = !!ntfy.enabled;
   $('#ntfyFields').hidden = !ntfy.enabled;
-  $('#ntfyServer').value = ntfy.server;
-  $('#ntfyTopic').value = ntfy.topic;
+  setVal('#ntfyServer', ntfy.server);
+  setVal('#ntfyTopic', ntfy.topic);
   $('#ntfyOnReminder').checked = !!ntfy.onReminder;
+}
+
+function renderSyncStatus() {
+  const el2 = $('#syncStatus');
+  if (!el2) return;
+  if (!SYNC.isEnabled()) { el2.textContent = 'Desligado — os dados ficam só neste aparelho.'; return; }
+  const s = SYNC.status();
+  const quando = s.em ? fmtTime(s.em) : '—';
+  const mapa = {
+    ok: s.pendentes ? `Sincronizado ${quando} · ${s.pendentes} a enviar` : `Tudo sincronizado · ${quando}`,
+    sync: 'Sincronizando…',
+    erro: `Sem conexão com o servidor (${s.erro || 'erro'}) — tentando de novo`,
+    off: 'Desligado',
+  };
+  el2.textContent = mapa[s.estado] || '—';
 }
 
 function baixarBackup() {
@@ -747,6 +776,43 @@ function tick() {
 }
 
 /* ================================================================ WhatsApp (UI) */
+
+/* ================================================================ sincronização (UI) */
+
+function ligarEventosSync() {
+  SYNC.onStatus(() => { if (viewAtual === 'ajustes') renderSyncStatus(); });
+
+  $('#syncEnabled').addEventListener('change', async (e) => {
+    if (e.target.checked) {
+      $('#syncFields').hidden = false;
+      let code = $('#syncCode').value.trim() || SYNC.getCode();
+      if (!code) { code = SYNC.sugerirCodigo(); $('#syncCode').value = code; }
+      toast('Sincronização ligada');
+      await SYNC.enable(code);
+      renderSyncStatus();
+    } else {
+      SYNC.disable();
+      $('#syncFields').hidden = true;
+    }
+  });
+
+  $('#syncGen').addEventListener('click', () => {
+    $('#syncCode').value = SYNC.sugerirCodigo();
+    toast('Código gerado — use o mesmo no outro celular');
+  });
+
+  $('#syncCode').addEventListener('change', async (e) => {
+    const code = e.target.value.trim();
+    if (code.length >= 4) { await SYNC.enable(code); renderSyncStatus(); }
+  });
+
+  $('#syncNow').addEventListener('click', async () => {
+    if (!SYNC.isEnabled()) { toast('Ligue a sincronização e informe um código'); return; }
+    toast('Sincronizando…');
+    await SYNC.syncOnce();
+    renderSyncStatus();
+  });
+}
 
 /* ================================================================ ntfy (UI) */
 
@@ -948,6 +1014,7 @@ function ligarEventos() {
   $('#btnAgenda').addEventListener('click', sheetAgenda);
   $('#btnResumo').addEventListener('click', () => copiar(textoResumo()));
 
+  ligarEventosSync();
   ligarEventosNtfy();
   ligarEventosWhatsApp();
 
@@ -1006,9 +1073,11 @@ function ligarEventos() {
 /* ================================================================ boot */
 
 S.onChange(render);
+S.onChange(() => SYNC.triggerSoon());
 ligarEventos();
 irPara('agora');
 setInterval(tick, 1000);
+SYNC.start();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

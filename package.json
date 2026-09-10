@@ -6,10 +6,15 @@
   "description": "PWA offline para a rotina do recem-nascido: mamadas, remedios, fraldas e sono.",
   "scripts": {
     "start": "python3 -m http.server 8080",
-    "test": "node tests/smoke.mjs",
+    "test": "node tests/sync.test.mjs && node server/test.mjs && node tests/smoke.mjs && node tests/sync-e2e.mjs",
+    "test:unit": "node tests/sync.test.mjs && node server/test.mjs",
+    "test:e2e": "node tests/smoke.mjs && node tests/sync-e2e.mjs",
     "icons": "python3 tools/make_icons.py"
   },
   "devDependencies": {
     "playwright": "^1.49.1"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.4"
   }
 }

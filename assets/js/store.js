@@ -8,11 +8,15 @@ const KEY = 'rotina-bebe:v1';
 export const MS_MIN = 60000;
 export const MS_HOUR = 3600000;
 
-/** Remédios que já vêm sugeridos (mesma rotina dos alarmes de pós-parto). */
+/**
+ * Remédios que já vêm sugeridos (mesma rotina dos alarmes de pós-parto).
+ * Ids fixos (não aleatórios) para que dois celulares comecem idênticos e o
+ * perfil não fique em ping-pong na sincronização.
+ */
 const MEDS_PADRAO = [
-  { name: 'Cefalexina', intervalHours: 6, dose: '', who: 'mãe' },
-  { name: 'Paracetamol', intervalHours: 8, dose: '', who: 'mãe' },
-  { name: 'Profenid', intervalHours: 12, dose: '', who: 'mãe' },
+  { id: 'med-cefalexina', name: 'Cefalexina', intervalHours: 6, dose: '', who: 'mãe' },
+  { id: 'med-paracetamol', name: 'Paracetamol', intervalHours: 8, dose: '', who: 'mãe' },
+  { id: 'med-profenid', name: 'Profenid', intervalHours: 12, dose: '', who: 'mãe' },
 ];
 
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -45,7 +49,7 @@ function estadoInicial() {
         onReminder: true,   // manda um push quando o aviso dispara (app aberto)
       },
     },
-    meds: MEDS_PADRAO.map((m) => ({ id: uid(), active: true, ...m })),
+    meds: MEDS_PADRAO.map((m) => ({ active: true, ...m })),
     events: [],
     activeFeed: null,   // { startAt, side, segments: [{side, min}] }
     activeSleep: null,  // { startAt }
@@ -68,6 +72,7 @@ function migrar(dados) {
 export let state = carregar();
 
 function carregar() {
+  if (typeof localStorage === 'undefined') return estadoInicial(); // Node/SSR
   try {
     const bruto = localStorage.getItem(KEY);
     return bruto ? migrar(JSON.parse(bruto)) : estadoInicial();
@@ -92,38 +97,43 @@ export function save() {
 /* ------------------------------------------------------------------ eventos */
 /** Tipos: feed | diaper | sleep | med | note */
 export function addEvent(ev) {
-  const completo = { id: uid(), at: Date.now(), ...ev };
+  const completo = { id: uid(), at: Date.now(), ...ev, updatedAt: Date.now(), _dirty: true };
   state.events.push(completo);
   state.events.sort((a, b) => a.at - b.at);
   save();
   return completo;
 }
 
+/** Exclusão é "tombstone": marca deleted para a exclusão sincronizar. */
 export function removeEvent(id) {
-  state.events = state.events.filter((e) => e.id !== id);
+  const ev = state.events.find((e) => e.id === id);
+  if (!ev) return;
+  ev.deleted = true;
+  ev.updatedAt = Date.now();
+  ev._dirty = true;
   save();
 }
 
 export function updateEvent(id, patch) {
   const ev = state.events.find((e) => e.id === id);
   if (!ev) return null;
-  Object.assign(ev, patch);
+  Object.assign(ev, patch, { updatedAt: Date.now(), _dirty: true });
   state.events.sort((a, b) => a.at - b.at);
   save();
   return ev;
 }
 
-/** Último evento de um tipo (mais recente primeiro), com filtro opcional. */
+/** Último evento de um tipo (mais recente primeiro), ignorando apagados. */
 export function lastEvent(type, filtro = () => true) {
   for (let i = state.events.length - 1; i >= 0; i -= 1) {
     const ev = state.events[i];
-    if (ev.type === type && filtro(ev)) return ev;
+    if (ev.type === type && !ev.deleted && filtro(ev)) return ev;
   }
   return null;
 }
 
 export function eventsBetween(inicio, fim) {
-  return state.events.filter((e) => e.at >= inicio && e.at < fim);
+  return state.events.filter((e) => !e.deleted && e.at >= inicio && e.at < fim);
 }
 
 /* ------------------------------------------------------------------ mamadas */
@@ -245,7 +255,14 @@ export function saveMed(dados) {
 
 export function removeMed(id) {
   state.meds = state.meds.filter((m) => m.id !== id);
-  state.events = state.events.filter((e) => !(e.type === 'med' && e.medId === id));
+  // Apaga as doses desse remédio como tombstone, para a exclusão sincronizar.
+  state.events.forEach((e) => {
+    if (e.type === 'med' && e.medId === id && !e.deleted) {
+      e.deleted = true;
+      e.updatedAt = Date.now();
+      e._dirty = true;
+    }
+  });
   save();
 }
 

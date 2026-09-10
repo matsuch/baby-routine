@@ -71,6 +71,41 @@ botão *Programar lembretes da noite*. Como rede de segurança, vale manter tamb
 **alarmes do celular**; a *Agenda do dia* ajuda a acertar os horários. O app em si
 serve para saber *quanto falta* e *o que já foi feito*.
 
+## Sincronizar entre celulares (Vercel + Neon)
+
+Para o seu celular e o do parceiro(a) verem e registrarem **a mesma rotina**, o app
+sincroniza por um **código de família** através de uma função serverless na
+[Vercel](https://vercel.com) com banco [Neon](https://neon.tech) (Postgres). Os
+eventos sincronizam um a um (nada se sobrescreve quando os dois registram juntos); o
+perfil (nome, remédios, ajustes) sincroniza por última-edição-vence.
+
+> Sincronização é **opcional**. Sem ela, o app segue funcionando local e offline. Ela
+> só funciona quando publicado na Vercel (o GitHub Pages não roda backend).
+
+**1) Banco no Neon** (grátis): crie um projeto em neon.tech e copie a *connection
+string* (algo como `postgresql://...@...neon.tech/neondb?sslmode=require`). As tabelas
+são criadas sozinhas na primeira sincronização (esquema em [`db/schema.sql`](db/schema.sql)).
+
+**2) Publicar na Vercel**: importe este repositório em vercel.com/new e adicione, em
+**Settings → Environment Variables**:
+
+| Variável | Valor |
+|---|---|
+| `DATABASE_URL` | a connection string do Neon |
+| `SYNC_PEPPER` | um segredo qualquer (embaralha o código antes de virar chave no banco) |
+
+Faça o deploy. O app fica em `https://<seu-projeto>.vercel.app` e a sincronização
+em `POST /api/sync`.
+
+**3) No app** (nos dois celulares): **Ajustes → Sincronizar entre celulares** → ligue,
+use **o mesmo código** nos dois (gere um no primeiro e copie para o segundo) →
+*Sincronizar agora*. Pronto.
+
+> ⚠️ Quem tiver o código acessa os dados da família — use um código difícil de
+> adivinhar e não o compartilhe fora do casal.
+
+A cada `git push` na branch principal, a Vercel republica sozinha (como o Pages).
+
 ## Publicar de graça (GitHub Pages)
 
 O repositório já vem com o workflow `.github/workflows/pages.yml`, que liga o Pages
@@ -103,9 +138,16 @@ assets/js/format.js        formatação de horas, durações e contagens regress
 assets/js/app.js           renderização das telas, interações e avisos
 assets/js/ntfy.js          push simples via ntfy.sh (imediato e agendado)
 assets/js/wa.js            adaptador de WhatsApp (WAHA/Evolution) — usado no app e no worker
+assets/js/sync.js          sincronização entre celulares (cliente do /api/sync)
+api/sync.js                função serverless da Vercel (sincroniza via Neon)
+lib/sync-core.mjs          núcleo do sync (sem dependências, testável)
+db/schema.sql              esquema do Postgres (Neon)
+vercel.json                config da Vercel
 sw.js                      service worker (abre offline)
 tools/make_icons.py        gera os ícones PNG sem dependências
-tests/smoke.mjs            teste de fumaça ponta a ponta
+tests/smoke.mjs            teste de fumaça ponta a ponta (UI no navegador)
+tests/sync.test.mjs        testes do sync (núcleo + helpers do cliente)
+tests/sync-e2e.mjs         dois "celulares" sincronizando ponta a ponta
 server/                    worker 24/7 de WhatsApp + Docker (veja server/README.md)
   worker.mjs               recebe a agenda e dispara os lembretes na hora
   docker-compose.yml       WAHA + worker

@@ -172,6 +172,29 @@ try {
   checar(agendados.every((c) => c.headers.Delay && Number(c.headers.Delay) > 0),
     'lembrete programado sem header Delay (entrega agendada)');
 
+  // sincronização entre celulares: liga (gera código) e empurra pro /api/sync (stubado)
+  await page.evaluate(() => {
+    window.__sync = [];
+    window.fetch = async (url, opts) => {
+      if (String(url).includes('/api/sync')) window.__sync.push({ url: String(url), body: JSON.parse(opts.body) });
+      return { ok: true, status: 200, json: async () => ({ now: 1000, events: [], profile: null }), text: async () => '' };
+    };
+  });
+  await page.check('#syncEnabled');
+  checar(!(await page.locator('#syncFields').isHidden()), 'campos de sincronização não apareceram');
+  const codigo = await page.inputValue('#syncCode');
+  checar(/^\w{4}-\w{4}-\w{4}$/.test(codigo), `código de família não foi gerado: "${codigo}"`);
+  await page.waitForFunction(() => window.__sync && window.__sync.length > 0, { timeout: 4000 });
+  const primeiraSync = await page.evaluate(() => window.__sync[0]);
+  checar(primeiraSync.url.includes('/api/sync'), 'sync não chamou /api/sync');
+  checar(primeiraSync.body.familyCode === codigo, 'sync não enviou o código de família');
+  checar(Array.isArray(primeiraSync.body.events) && primeiraSync.body.events.length >= 1,
+    'primeira sincronização deveria empurrar os eventos locais existentes');
+  checar(primeiraSync.body.events.every((e) => !('_dirty' in e)), 'não deve enviar _dirty ao servidor');
+  const syncBk = await page.evaluate(() => JSON.parse(localStorage.getItem('rotina-bebe:sync')));
+  checar(syncBk.enabled === true && syncBk.familyCode === codigo, 'config de sync não persistiu');
+  await page.uncheck('#syncEnabled'); // desliga para não interferir no teste de persistência
+
   // persistência e service worker
   const antes = await page.evaluate(() => JSON.parse(localStorage.getItem('rotina-bebe:v1')).events.length);
   await page.reload({ waitUntil: 'networkidle' });

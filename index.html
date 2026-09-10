@@ -92,6 +92,26 @@
   <!-- ============ AJUSTES ============ -->
   <section class="view" id="view-ajustes" hidden>
     <div class="card">
+      <label class="switch">
+        <span>Sincronizar entre celulares</span>
+        <input type="checkbox" id="syncEnabled">
+      </label>
+      <div id="syncFields" hidden>
+        <p class="muted small">Use o <strong>mesmo código</strong> nos dois celulares (o seu e o do parceiro). Quem tem o código vê e registra a mesma rotina.</p>
+        <label class="field">
+          <span>Código de família</span>
+          <input type="text" id="syncCode" placeholder="xxxx-xxxx-xxxx" autocomplete="off" autocapitalize="off" spellcheck="false">
+        </label>
+        <div class="row-2">
+          <button class="btn btn-ghost" id="syncGen" type="button">Gerar código</button>
+          <button class="btn btn-ghost" id="syncNow" type="button">Sincronizar agora</button>
+        </div>
+        <p class="muted small" id="syncStatus">—</p>
+        <p class="disclaimer">Precisa do app publicado na Vercel com o banco (Neon) configurado — veja o README. Quem tiver o código acessa os dados, então use um código difícil de adivinhar e não o compartilhe fora do casal. Sem sincronização, o app continua funcionando só neste aparelho.</p>
+      </div>
+    </div>
+
+    <div class="card">
       <label class="field">
         <span>Nome do bebê</span>
         <input type="text" id="setName" placeholder="Bebê" autocomplete="off">
