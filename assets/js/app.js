@@ -299,7 +299,7 @@ function heroFoco() {
 
 function focusChip(emoji, tone, label, valor) {
   const c = el('div', 'fchip');
-  c.append(el('div', `chip ${tone}`, emoji));
+  c.append(el('div', `chip tint-${tone}`, emoji));
   const corpo = el('div', 'fchip-b');
   corpo.append(el('span', null, label), el('b', null, valor));
   c.append(corpo);
@@ -438,10 +438,12 @@ function subtituloEvento(ev) {
   }
 }
 
+const EVENTO_TONE = { feed: 'lamp', sleep: 'sleep', burp: 'leaf', med: 'med', diaper: 'aqua', note: '' };
+
 function linhaEvento(ev, { apagavel = true } = {}) {
   const item = el('div', 'item');
   const emoji = ev.type === 'diaper' && ev.kind !== 'xixi' ? '💩' : EVENTO_EMOJI[ev.type] || '•';
-  item.append(el('div', 'emoji', emoji));
+  item.append(el('div', `emoji tint-${EVENTO_TONE[ev.type] || 'plain'}`, emoji));
   const corpo = el('div', 'item-body');
   corpo.append(el('div', 'item-title', tituloEvento(ev)), el('div', 'item-sub', subtituloEvento(ev)));
   item.append(corpo, el('div', 'item-time', fmtTime(ev.at)));
@@ -499,6 +501,13 @@ function renderMamada() {
   $('#btnFeedCancel').hidden = !ativa;
   $('#btnFeedManual').hidden = !!ativa;
 
+  const foco = $('#feedFocus');
+  foco.innerHTML = '';
+  const ultima = S.lastEvent('feed');
+  const prox = S.nextFeedAt();
+  foco.append(focusChip('🍼', 'lamp', 'Última mamada', ultima ? fmtTime(ultima.at) : '—'));
+  foco.append(focusChip('⏰', 'sleep', 'Próxima', prox ? fmtTime(prox) : '—'));
+
   const lista = $('#feedList');
   lista.innerHTML = '';
   const feeds = S.daySummary().eventos.filter((e) => e.type === 'feed').reverse();
@@ -548,10 +557,14 @@ function renderRemedios() {
   state.meds.forEach((med) => {
     const card = el('div', 'card med');
     const head = el('div', 'med-head');
-    head.append(el('div', 'med-name', med.name));
+    head.append(el('div', 'chip tint-med', '💊'));
+    const texto = el('div', 'med-head-text');
+    texto.append(
+      el('div', 'med-name', med.name),
+      el('div', 'med-meta', `a cada ${med.intervalHours}h${med.dose ? ` · ${med.dose}` : ''}${med.who ? ` · ${med.who}` : ''}`),
+    );
+    head.append(texto);
     card.append(head);
-    card.append(el('div', 'med-meta',
-      `a cada ${med.intervalHours}h${med.dose ? ` · ${med.dose}` : ''}${med.who ? ` · ${med.who}` : ''}`));
 
     const dose = S.lastDose(med.id);
     const prox = S.nextDoseAt(med);
@@ -665,12 +678,53 @@ function renderDiario() {
   renderResumo($('#dayGrid'), resumo);
   renderRelogioDia($('#dayClock'), ref);
   renderSleepBar($('#daySleepBar'), ref);
+  renderSemana($('#weekChart'));
 
   const linha = $('#timeline');
   linha.innerHTML = '';
   const eventos = [...resumo.eventos].reverse();
   if (!eventos.length) linha.append(el('p', 'empty', 'Nenhum registro neste dia.'));
   eventos.forEach((ev) => linha.append(linhaEvento(ev)));
+}
+
+/** Gráfico de barras: sono (horas) nos últimos 7 dias — estilo Napper. */
+function renderSemana(container) {
+  container.innerHTML = '';
+  const dias = [];
+  for (let i = 6; i >= 0; i -= 1) { const d = new Date(); d.setDate(d.getDate() - i); dias.push(d); }
+  const horas = dias.map((d) => S.daySummary(d).minutosDormindo / 60);
+  const totalMin = dias.reduce((t, d) => t + S.daySummary(d).minutosDormindo, 0);
+  const comDados = horas.filter((h) => h > 0).length;
+  const media = comDados ? totalMin / comDados : 0;
+  const max = Math.max(8, ...horas);
+
+  const card = el('div', 'card');
+  const topo = el('div', 'sleepbar-top');
+  topo.append(el('span', null, '📊 Sono nos últimos 7 dias'),
+    el('strong', null, `média ${media ? fmtMin(media) : '—'}`));
+  card.append(topo);
+
+  const NS = 'http://www.w3.org/2000/svg';
+  const W = 320; const H = 120; const base = 96; const bw = 26; const gap = (W - bw * 7) / 8;
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('class', 'weekchart');
+  const add = (tag, attrs, txt) => {
+    const e = document.createElementNS(NS, tag);
+    Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, v));
+    if (txt != null) e.textContent = txt;
+    svg.append(e);
+    return e;
+  };
+  dias.forEach((d, i) => {
+    const x = gap + i * (bw + gap);
+    const h = Math.round((horas[i] / max) * (base - 12));
+    add('rect', { x, y: base - h, width: bw, height: Math.max(h, 2), rx: 6, class: i === 6 ? 'wc-bar is-today' : 'wc-bar' });
+    add('text', { x: x + bw / 2, y: base + 14, class: 'wc-day' }, ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'][d.getDay()]);
+    if (horas[i] > 0) add('text', { x: x + bw / 2, y: base - h - 4, class: 'wc-val' }, Math.round(horas[i]) + 'h');
+  });
+  card.append(svg);
+  container.append(card);
 }
 
 function textoResumo() {

@@ -105,19 +105,20 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 .fchip-b span { color: var(--muted); font-size: 11.5px; font-weight: 600; }
 .fchip-b b { font-size: 16px; font-weight: 800; letter-spacing: -0.02em; }
 
-/* chip glossy (aproxima os ícones 3D do Napper) */
-.chip {
-  width: 42px; height: 42px; border-radius: 50%; flex: none;
-  display: grid; place-items: center; font-size: 21px; line-height: 1;
-  background:
-    radial-gradient(120% 120% at 30% 22%, rgba(255,255,255,.18), rgba(255,255,255,0) 46%),
-    var(--surface-2);
+/* chips glossy (aproximam os ícones 3D do Napper) — base + tons por categoria */
+.chip, .item .emoji {
+  border-radius: 50%; flex: none; display: grid; place-items: center; line-height: 1;
+  background: radial-gradient(120% 120% at 30% 22%, rgba(255,255,255,.16), rgba(255,255,255,0) 46%), var(--surface-2);
   border: 1px solid var(--line-soft);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
 }
-.chip.lamp { background: radial-gradient(120% 120% at 30% 22%, rgba(255,255,255,.22), rgba(255,255,255,0) 46%), color-mix(in oklab, var(--accent) 26%, var(--surface-2)); border-color: color-mix(in oklab, var(--accent) 35%, var(--line)); }
-.chip.sleep { background: radial-gradient(120% 120% at 30% 22%, rgba(255,255,255,.22), rgba(255,255,255,0) 46%), color-mix(in oklab, var(--sleep) 26%, var(--surface-2)); border-color: color-mix(in oklab, var(--sleep) 35%, var(--line)); }
-.chip.leaf { background: radial-gradient(120% 120% at 30% 22%, rgba(255,255,255,.22), rgba(255,255,255,0) 46%), color-mix(in oklab, var(--diaper) 26%, var(--surface-2)); border-color: color-mix(in oklab, var(--diaper) 35%, var(--line)); }
+.chip { width: 42px; height: 42px; font-size: 21px; }
+.item .emoji { width: 38px; height: 38px; font-size: 19px; }
+.tint-lamp { background: radial-gradient(120% 120% at 30% 22%, rgba(255,255,255,.22), rgba(255,255,255,0) 46%), color-mix(in oklab, var(--accent) 26%, var(--surface-2)); border-color: color-mix(in oklab, var(--accent) 34%, var(--line)); }
+.tint-sleep { background: radial-gradient(120% 120% at 30% 22%, rgba(255,255,255,.22), rgba(255,255,255,0) 46%), color-mix(in oklab, var(--sleep) 26%, var(--surface-2)); border-color: color-mix(in oklab, var(--sleep) 34%, var(--line)); }
+.tint-leaf { background: radial-gradient(120% 120% at 30% 22%, rgba(255,255,255,.22), rgba(255,255,255,0) 46%), color-mix(in oklab, var(--diaper) 26%, var(--surface-2)); border-color: color-mix(in oklab, var(--diaper) 34%, var(--line)); }
+.tint-med { background: radial-gradient(120% 120% at 30% 22%, rgba(255,255,255,.22), rgba(255,255,255,0) 46%), color-mix(in oklab, var(--med) 26%, var(--surface-2)); border-color: color-mix(in oklab, var(--med) 34%, var(--line)); }
+.tint-aqua { background: radial-gradient(120% 120% at 30% 22%, rgba(255,255,255,.22), rgba(255,255,255,0) 46%), color-mix(in oklab, #79c6ec 24%, var(--surface-2)); border-color: color-mix(in oklab, #79c6ec 32%, var(--line)); }
 
 /* ---------- layout ---------- */
 #main { padding: 0 var(--edge); max-width: 620px; margin: 0 auto; }
@@ -239,6 +240,18 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 .clock-legend .dot.sleep { background: var(--sleep); }
 .clock-legend .dot.feed { background: var(--accent); }
 
+/* navegação de dia (Diário) */
+.day-nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 14px; }
+.day-nav strong { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; }
+.day-nav .icon-btn:disabled { opacity: .35; }
+
+/* gráfico semanal de sono */
+.weekchart { width: 100%; height: auto; display: block; margin-top: 12px; }
+.wc-bar { fill: color-mix(in oklab, var(--sleep) 55%, var(--surface-2)); }
+.wc-bar.is-today { fill: var(--sleep); }
+.wc-day { fill: var(--muted); font-size: 11px; font-weight: 700; text-anchor: middle; }
+.wc-val { fill: var(--muted); font-size: 10px; font-weight: 700; text-anchor: middle; }
+
 /* ---------- resumo do dia (tiles uniformes) ---------- */
 .today-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
 .stat {
@@ -255,7 +268,7 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
   background: var(--surface); border: 1px solid var(--line-soft);
   border-radius: var(--r-md); padding: 12px 14px;
 }
-.item .emoji { font-size: 20px; width: 26px; text-align: center; flex: none; }
+/* .item .emoji herda o chip base (ver seção de chips) */
 .item-body { flex: 1; min-width: 0; }
 .item-title { font-weight: 700; font-size: 15px; }
 .item-sub { color: var(--muted); font-size: 13px; font-weight: 600; }
@@ -286,9 +299,10 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 
 /* ---------- remédios ---------- */
 .med { display: block; }
-.med-head { display: flex; align-items: baseline; gap: 8px; }
-.med-name { font-weight: 800; font-size: 17px; flex: 1; letter-spacing: -0.02em; }
-.med-meta { color: var(--muted); font-size: 13px; font-weight: 600; margin-top: 3px; }
+.med-head { display: flex; align-items: center; gap: 12px; }
+.med-head-text { min-width: 0; flex: 1; }
+.med-name { font-weight: 800; font-size: 17px; letter-spacing: -0.02em; }
+.med-meta { color: var(--muted); font-size: 13px; font-weight: 600; margin-top: 2px; }
 .med-when { font-size: 14px; font-weight: 700; margin-top: 10px; color: var(--muted); }
 .med-when.is-due { color: var(--accent); }
 .med-when.is-late { color: var(--late); }
