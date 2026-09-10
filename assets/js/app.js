@@ -280,48 +280,94 @@ function renderRelogioDia(container, ref = new Date()) {
   container.append(legenda);
 }
 
+/** O evento em destaque no centro do herói: o próximo mais relevante. */
+function heroFoco() {
+  if (state.activeFeed) return { label: 'Mamando agora', big: `desde ${fmtTime(state.activeFeed.startAt)}`, tone: 'lamp' };
+  if (state.activeSleep) return { label: 'Dormindo', big: fmtHM(Date.now() - state.activeSleep.startAt), tone: 'sleep', at: state.activeSleep.startAt };
+  const cand = [];
+  const feed = S.nextFeedAt();
+  if (feed) cand.push({ at: feed, label: 'Próxima mamada', tone: 'lamp' });
+  const nap = S.nextNap();
+  if (nap) cand.push({ at: nap.start, label: 'Próxima soneca', tone: 'sleep' });
+  if (!cand.length) return { label: 'Vamos começar', big: 'registre', tone: 'sleep' };
+  cand.sort((a, b) => a.at - b.at);
+  const c = cand[0];
+  const info = countdown(c.at);
+  const big = info.state === 'due' ? 'agora' : info.state === 'late' ? 'atrasada' : info.label;
+  return { label: c.label, big, tone: c.tone, at: c.at };
+}
+
+function focusChip(emoji, tone, label, valor) {
+  const c = el('div', 'fchip');
+  c.append(el('div', `chip ${tone}`, emoji));
+  const corpo = el('div', 'fchip-b');
+  corpo.append(el('span', null, label), el('b', null, valor));
+  c.append(corpo);
+  return c;
+}
+
+/** Herói da Home: anel do dia (sono/mamadas) com a contagem do próximo no centro. */
+function renderHero(container) {
+  container.innerHTML = '';
+  const foco = heroFoco();
+  const cor = foco.tone === 'lamp' ? 'var(--accent)' : 'var(--sleep)';
+  const NS = 'http://www.w3.org/2000/svg';
+  const [inicio, fim] = S.dayBounds();
+  const eventos = S.eventsBetween(inicio, fim);
+  const cx = 120; const cy = 120; const r = 96;
+
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 240 240');
+  svg.setAttribute('class', 'hero-ring');
+  const ang = (t) => ((t - inicio) / (24 * MS_HOUR)) * 360 - 90;
+  const ponto = (raio, deg) => { const a = (deg * Math.PI) / 180; return [cx + raio * Math.cos(a), cy + raio * Math.sin(a)]; };
+  const add = (tag, attrs) => { const e = document.createElementNS(NS, tag); Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, v)); svg.append(e); return e; };
+
+  add('circle', { cx, cy, r, class: 'hero-track' });
+  eventos.filter((e) => e.type === 'sleep' && e.endAt).forEach((e) => {
+    const a1 = ang(Math.max(e.at, inicio)); const a2 = ang(Math.min(e.endAt, fim));
+    if (a2 - a1 < 0.5) return;
+    const [x1, y1] = ponto(r, a1); const [x2, y2] = ponto(r, a2);
+    add('path', { d: `M ${x1} ${y1} A ${r} ${r} 0 ${a2 - a1 > 180 ? 1 : 0} 1 ${x2} ${y2}`, class: 'hero-sleep' });
+  });
+  eventos.filter((e) => e.type === 'feed').forEach((e) => { const [x, y] = ponto(r, ang(e.at)); add('circle', { cx: x, cy: y, r: 3.4, class: 'hero-feed' }); });
+  if (foco.at && foco.at >= inicio && foco.at < fim) {
+    const [mx, my] = ponto(r, ang(foco.at));
+    add('circle', { cx: mx, cy: my, r: 10, fill: cor, opacity: '.22' });
+    add('circle', { cx: mx, cy: my, r: 5, fill: cor });
+  }
+  const [nx1, ny1] = ponto(r - 10, ang(Date.now())); const [nx2, ny2] = ponto(r + 8, ang(Date.now()));
+  add('line', { x1: nx1, y1: ny1, x2: nx2, y2: ny2, class: 'hero-now' });
+
+  const tl = add('text', { x: cx, y: cy - 22, class: 'hero-label' }); tl.textContent = foco.label;
+  const tb = add('text', { x: cx, y: cy + 10, class: 'hero-big', fill: cor }); tb.textContent = foco.big;
+  if (foco.at) { const ts = add('text', { x: cx, y: cy + 34, class: 'hero-sub' }); ts.textContent = fmtTime(foco.at); }
+  container.append(svg);
+
+  const chips = el('div', 'focus-chips');
+  const ultima = S.lastEvent('feed');
+  chips.append(focusChip('🍼', 'lamp', 'Última mamada', ultima ? fmtTime(ultima.at) : '—'));
+  if (state.activeSleep) chips.append(focusChip('😴', 'sleep', 'Dormindo há', fmtGap(Date.now() - state.activeSleep.startAt)));
+  else { const wake = S.lastWakeAt(); chips.append(focusChip('🌙', 'sleep', 'Acordado há', wake ? fmtGap(Date.now() - wake) : '—')); }
+  container.append(chips);
+}
+
 function renderAgora() {
+  renderHero($('#hero'));
+
   const cards = $('#nextCards');
   cards.innerHTML = '';
-
   if (state.activeBurp) cards.append(cardArroto());
   if (state.activeSleep) cards.append(cardSonoAtivo());
-  else { const jc = cardJanelaSono(); if (jc) cards.append(jc); }
-
-  // — próxima mamada —
-  const proxima = S.nextFeedAt();
-  const ultima = S.lastEvent('feed');
   if (state.activeFeed) {
     cards.append(cartaoProximo({
-      emoji: '🍼',
-      titulo: 'Mamando agora',
-      sub: `Lado ${SIDE_LABEL[state.activeFeed.side]} · começou ${fmtTime(state.activeFeed.startAt)}`,
-      at: Date.now(),
-      onClick: () => irPara('mamada'),
+      emoji: '🍼', titulo: 'Mamando agora',
+      sub: `Lado ${SIDE_LABEL[state.activeFeed.side]} · desde ${fmtTime(state.activeFeed.startAt)}`,
+      at: Date.now(), onClick: () => irPara('mamada'),
     }));
-  } else if (proxima) {
-    const lado = S.nextSide();
-    cards.append(cartaoProximo({
-      emoji: '🍼',
-      titulo: 'Próxima mamada',
-      sub: `${fmtTime(proxima)} · última às ${fmtTime(ultima.at)}${lado ? ` · dar o ${SIDE_LABEL[lado]}` : ''}`,
-      at: proxima,
-      onClick: () => irPara('mamada'),
-    }));
-  } else {
-    const vazio = el('button', 'next');
-    vazio.append(el('div', 'emoji', '🍼'));
-    const corpo = el('div', 'next-body');
-    corpo.append(
-      el('div', 'next-title', 'Nenhuma mamada registrada'),
-      el('div', 'next-sub', 'Toque para começar a primeira'),
-    );
-    vazio.append(corpo);
-    vazio.addEventListener('click', () => irPara('mamada'));
-    cards.append(vazio);
   }
 
-  // — remédios com dose já iniciada —
+  // — próximas doses de remédio —
   state.meds
     .filter((m) => m.active !== false && S.nextDoseAt(m))
     .map((m) => ({ med: m, at: S.nextDoseAt(m) }))
@@ -329,11 +375,9 @@ function renderAgora() {
     .slice(0, 3)
     .forEach(({ med, at }) => {
       cards.append(cartaoProximo({
-        emoji: '💊',
-        titulo: med.name,
+        emoji: '💊', titulo: med.name,
         sub: `${fmtTime(at)} · a cada ${med.intervalHours}h${med.dose ? ` · ${med.dose}` : ''}`,
-        at,
-        onClick: () => irPara('remedios'),
+        at, onClick: () => irPara('remedios'),
       }));
     });
 
@@ -343,15 +387,11 @@ function renderAgora() {
   renderResumo($('#todayGrid'), S.daySummary());
   renderSleepBar($('#sleepBar'));
 
-  // — últimos registros —
   const recentes = $('#recentList');
   recentes.innerHTML = '';
   const ultimos = state.events.filter((e) => !e.deleted).slice(-6).reverse();
-  if (!ultimos.length) {
-    recentes.append(el('p', 'empty', 'Ainda nada registrado hoje.'));
-  } else {
-    ultimos.forEach((ev) => recentes.append(linhaEvento(ev)));
-  }
+  if (!ultimos.length) recentes.append(el('p', 'empty', 'Ainda nada registrado hoje.'));
+  else ultimos.forEach((ev) => recentes.append(linhaEvento(ev)));
 }
 
 function renderResumo(grid, resumo) {

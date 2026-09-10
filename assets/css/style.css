@@ -85,6 +85,40 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 .icon-btn:active { transform: scale(.92); }
 .icon-btn.is-on { background: var(--accent-soft); border-color: var(--accent); }
 
+/* ---------- herói (relógio da Home) ---------- */
+.hero { display: grid; justify-items: center; gap: 12px; margin: 2px 0 6px; }
+.hero-ring { width: min(76vw, 300px); height: auto; display: block; }
+.hero-track { fill: none; stroke: var(--surface-2); stroke-width: 10; }
+.hero-sleep { fill: none; stroke: var(--sleep); stroke-width: 10; stroke-linecap: round; }
+.hero-feed { fill: var(--accent); }
+.hero-now { stroke: var(--muted); stroke-width: 2; stroke-linecap: round; opacity: .8; }
+.hero-label { fill: var(--muted); font-size: 13px; font-weight: 700; text-anchor: middle; }
+.hero-big { font-size: 30px; font-weight: 800; text-anchor: middle; letter-spacing: -0.03em; }
+.hero-sub { fill: var(--muted); font-size: 12px; font-weight: 700; text-anchor: middle; }
+
+.focus-chips { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
+.fchip {
+  display: flex; align-items: center; gap: 11px;
+  background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-md); padding: 11px 13px;
+}
+.fchip-b { display: grid; min-width: 0; }
+.fchip-b span { color: var(--muted); font-size: 11.5px; font-weight: 600; }
+.fchip-b b { font-size: 16px; font-weight: 800; letter-spacing: -0.02em; }
+
+/* chip glossy (aproxima os ícones 3D do Napper) */
+.chip {
+  width: 42px; height: 42px; border-radius: 50%; flex: none;
+  display: grid; place-items: center; font-size: 21px; line-height: 1;
+  background:
+    radial-gradient(120% 120% at 30% 22%, rgba(255,255,255,.18), rgba(255,255,255,0) 46%),
+    var(--surface-2);
+  border: 1px solid var(--line-soft);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+}
+.chip.lamp { background: radial-gradient(120% 120% at 30% 22%, rgba(255,255,255,.22), rgba(255,255,255,0) 46%), color-mix(in oklab, var(--accent) 26%, var(--surface-2)); border-color: color-mix(in oklab, var(--accent) 35%, var(--line)); }
+.chip.sleep { background: radial-gradient(120% 120% at 30% 22%, rgba(255,255,255,.22), rgba(255,255,255,0) 46%), color-mix(in oklab, var(--sleep) 26%, var(--surface-2)); border-color: color-mix(in oklab, var(--sleep) 35%, var(--line)); }
+.chip.leaf { background: radial-gradient(120% 120% at 30% 22%, rgba(255,255,255,.22), rgba(255,255,255,0) 46%), color-mix(in oklab, var(--diaper) 26%, var(--surface-2)); border-color: color-mix(in oklab, var(--diaper) 35%, var(--line)); }
+
 /* ---------- layout ---------- */
 #main { padding: 0 var(--edge); max-width: 620px; margin: 0 auto; }
 .view { animation: fade .22s ease both; }
@@ -106,19 +140,26 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 }
 .card + .card { margin-top: 12px; }
 
-/* ---------- cartões "próximo" (linhas de ação) ---------- */
+/* ---------- cartões "próximo" (linhas de ação, altura uniforme) ---------- */
 .next {
-  display: flex; align-items: center; gap: 14px;
+  display: flex; align-items: center; gap: 13px; min-height: 66px;
   background: var(--surface); border: 1px solid var(--line-soft);
-  border-radius: var(--r-md); padding: 15px 16px; text-align: left; width: 100%;
+  border-radius: var(--r-md); padding: 12px 14px; text-align: left; width: 100%;
   cursor: pointer; transition: transform .1s ease, background .15s ease, border-color .15s ease;
 }
 .next:active { transform: scale(.99); background: var(--surface-2); }
-.next .emoji { font-size: 27px; line-height: 1; width: 40px; text-align: center; flex: none; }
+.next .emoji {
+  font-size: 22px; line-height: 1; width: 42px; height: 42px; flex: none;
+  display: grid; place-items: center; border-radius: 50%;
+  background:
+    radial-gradient(120% 120% at 30% 22%, rgba(255,255,255,.16), rgba(255,255,255,0) 46%),
+    var(--surface-2);
+  border: 1px solid var(--line-soft);
+}
 .next-body { flex: 1; min-width: 0; }
-.next-title { font-weight: 700; font-size: 15.5px; }
-.next-sub { color: var(--muted); font-size: 13px; font-weight: 600; margin-top: 2px; }
-.next-when { font-size: 21px; font-weight: 800; white-space: nowrap; letter-spacing: -0.02em; }
+.next-title { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.next-sub { color: var(--muted); font-size: 12.5px; font-weight: 600; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.next-when { font-size: 17px; font-weight: 800; white-space: nowrap; letter-spacing: -0.02em; min-width: 58px; text-align: right; flex: none; }
 /* estados: uma barra à esquerda comunica urgência sem repintar o card inteiro */
 .next.is-due, .next.is-late { position: relative; overflow: hidden; }
 .next.is-due::before, .next.is-late::before {
@@ -147,17 +188,32 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 .btn-danger { background: transparent; color: var(--danger); border-color: color-mix(in oklab, var(--danger) 40%, var(--line)); }
 .btn.block { display: block; width: 100%; margin-top: 12px; }
 
-/* ---------- registrar rápido ---------- */
-.quick-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(62px, 1fr)); gap: 9px; }
+/* ---------- registrar rápido (tiles uniformes com chip glossy) ---------- */
+.quick-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
 .quick {
-  background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-md);
-  padding: 13px 4px 11px; display: grid; gap: 7px; justify-items: center;
-  font-size: 12px; font-weight: 700; color: var(--text); cursor: pointer;
-  transition: transform .1s ease, background .15s ease, border-color .15s ease;
+  background: none; border: 0; border-radius: var(--r-md);
+  padding: 4px 0; display: grid; gap: 8px; justify-items: center;
+  font-size: 11.5px; font-weight: 700; color: var(--text); cursor: pointer;
+  transition: transform .1s ease;
 }
-.quick:active { transform: scale(.95); background: var(--surface-2); }
-.quick span { font-size: 23px; line-height: 1; }
+.quick:active { transform: scale(.93); }
+.quick span {
+  width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 24px; line-height: 1;
+  background:
+    radial-gradient(120% 120% at 30% 22%, rgba(255,255,255,.18), rgba(255,255,255,0) 46%),
+    var(--surface-2);
+  border: 1px solid var(--line-soft);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+  transition: border-color .15s ease;
+}
 .quick em { font-style: normal; }
+/* tinte cada ação com sua cor */
+.quick[data-quick="mamada"] span { background: radial-gradient(120% 120% at 30% 22%, rgba(255,255,255,.22), rgba(255,255,255,0) 46%), color-mix(in oklab, var(--accent) 24%, var(--surface-2)); border-color: color-mix(in oklab, var(--accent) 34%, var(--line)); }
+.quick[data-quick="xixi"] span { background: radial-gradient(120% 120% at 30% 22%, rgba(255,255,255,.22), rgba(255,255,255,0) 46%), color-mix(in oklab, var(--med) 22%, var(--surface-2)); border-color: color-mix(in oklab, var(--med) 32%, var(--line)); }
+.quick[data-quick="cocô"] span { background: radial-gradient(120% 120% at 30% 22%, rgba(255,255,255,.2), rgba(255,255,255,0) 46%), color-mix(in oklab, #c9955f 22%, var(--surface-2)); border-color: color-mix(in oklab, #c9955f 30%, var(--line)); }
+.quick[data-quick="arroto"] span { background: radial-gradient(120% 120% at 30% 22%, rgba(255,255,255,.22), rgba(255,255,255,0) 46%), color-mix(in oklab, var(--diaper) 22%, var(--surface-2)); border-color: color-mix(in oklab, var(--diaper) 32%, var(--line)); }
+.quick[data-quick="sono"] span { background: radial-gradient(120% 120% at 30% 22%, rgba(255,255,255,.22), rgba(255,255,255,0) 46%), color-mix(in oklab, var(--sleep) 24%, var(--surface-2)); border-color: color-mix(in oklab, var(--sleep) 34%, var(--line)); }
 
 /* ---------- sono ---------- */
 .sono-card .timer { color: var(--sleep); }
@@ -183,14 +239,15 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 .clock-legend .dot.sleep { background: var(--sleep); }
 .clock-legend .dot.feed { background: var(--accent); }
 
-/* ---------- resumo do dia ---------- */
-.today-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(60px, 1fr)); gap: 9px; }
+/* ---------- resumo do dia (tiles uniformes) ---------- */
+.today-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
 .stat {
   background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-md);
-  padding: 13px 6px 11px; text-align: center;
+  padding: 12px 4px 10px; text-align: center; min-height: 64px;
+  display: flex; flex-direction: column; justify-content: center; gap: 2px;
 }
-.stat b { display: block; font-size: 21px; font-weight: 800; letter-spacing: -0.02em; }
-.stat span { font-size: 11px; color: var(--muted); font-weight: 600; }
+.stat b { display: block; font-size: 19px; font-weight: 800; letter-spacing: -0.03em; }
+.stat span { font-size: 10.5px; color: var(--muted); font-weight: 600; }
 
 /* ---------- listas ---------- */
 .item {
