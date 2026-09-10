@@ -129,11 +129,164 @@ function cardArroto() {
   return card;
 }
 
+/** Duração longa como H:MM (para o sono). */
+function fmtHM(ms) {
+  const totalMin = Math.floor(ms / MS_MIN);
+  return `${Math.floor(totalMin / 60)}:${pad(totalMin % 60)}`;
+}
+
+/** Card com o cronômetro de sono (quando o bebê está dormindo). */
+function cardSonoAtivo() {
+  const s = state.activeSleep;
+  const card = el('div', 'card timer-card sono-card');
+  card.append(el('p', 'muted', `😴 Dormindo desde ${fmtTime(s.startAt)}`));
+  card.append(el('div', 'timer', fmtHM(Date.now() - s.startAt)));
+  const btn = el('button', 'btn btn-primary block', 'Acordou');
+  btn.addEventListener('click', () => {
+    const ev = S.toggleSleep();
+    vibrar();
+    if (ev) toast(`Acordou · dormiu ${fmtMin((ev.endAt - ev.at) / MS_MIN)}`);
+  });
+  card.append(btn);
+  return card;
+}
+
+/** Card de janela de sono / próxima soneca (quando acordado). Toque = iniciar sono. */
+function cardJanelaSono() {
+  const nap = S.nextNap();
+  if (!nap) return null;
+  const agora = Date.now();
+  const acordado = fmtGap(agora - nap.wake);
+  const w = nap.window;
+
+  let titulo; let sub; let quando; let estado = '';
+  if (agora < nap.start) {
+    titulo = 'Próxima soneca';
+    sub = `acordado há ${acordado} · janela ${w.min}–${w.max}min`;
+    quando = `~${fmtTime(nap.start)}`;
+  } else if (agora < nap.end) {
+    titulo = 'Hora da soneca 🌙';
+    sub = `acordado há ${acordado} · janela até ${fmtTime(nap.end)}`;
+    quando = 'agora';
+    estado = 'is-due';
+  } else {
+    titulo = 'Passou da janela';
+    sub = `acordado há ${acordado} · pode estar cansado`;
+    quando = `+${fmtGap(agora - nap.end)}`;
+    estado = 'is-late';
+  }
+
+  const card = el('button', `next ${estado}`);
+  card.append(el('div', 'emoji', '🌙'));
+  const corpo = el('div', 'next-body');
+  corpo.append(el('div', 'next-title', titulo), el('div', 'next-sub', sub));
+  card.append(corpo, el('div', 'next-when', quando));
+  card.addEventListener('click', () => {
+    S.toggleSleep();
+    vibrar();
+    toast('Sono iniciado — toque em Acordou quando acordar');
+  });
+  return card;
+}
+
+/** Barra "sono do dia vs. recomendado para a idade". */
+function renderSleepBar(container, ref = new Date()) {
+  container.innerHTML = '';
+  const min = S.daySummary(ref).minutosDormindo;
+  const rec = S.recommendedSleepH();
+  const alvoMin = rec.min * 60;
+  const frac = Math.min(1, alvoMin ? min / alvoMin : 0);
+  const atingiu = min >= alvoMin;
+
+  const card = el('div', 'card sleepbar');
+  const topo = el('div', 'sleepbar-top');
+  topo.append(
+    el('span', null, '😴 Sono do dia'),
+    el('strong', null, `${fmtMin(min)} <span class="muted">/ ~${rec.min}–${rec.max}h</span>`),
+  );
+  card.append(topo);
+  const trilho = el('div', 'sleepbar-track');
+  const barra = el('div', `sleepbar-fill${atingiu ? ' is-done' : ''}`);
+  barra.style.width = `${Math.round(frac * 100)}%`;
+  trilho.append(barra);
+  card.append(trilho);
+  container.append(card);
+}
+
+/** Relógio do dia (24h): sono como arcos, mamadas como marcas. */
+function renderRelogioDia(container, ref = new Date()) {
+  container.innerHTML = '';
+  const [inicio, fim] = S.dayBounds(ref);
+  const eventos = S.eventsBetween(inicio, fim);
+  const cx = 100;
+  const cy = 100;
+  const r = 74;
+  const NS = 'http://www.w3.org/2000/svg';
+
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 200 200');
+  svg.setAttribute('class', 'clock');
+
+  const ang = (t) => ((t - inicio) / (24 * MS_HOUR)) * 360 - 90;
+  const ponto = (raio, deg) => {
+    const a = (deg * Math.PI) / 180;
+    return [cx + raio * Math.cos(a), cy + raio * Math.sin(a)];
+  };
+  const add = (tag, attrs) => {
+    const e = document.createElementNS(NS, tag);
+    Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, v));
+    svg.append(e);
+    return e;
+  };
+
+  add('circle', { cx, cy, r, class: 'clock-track' });
+  // marcas de hora (0/6/12/18)
+  [0, 6, 12, 18].forEach((h) => {
+    const [x1, y1] = ponto(r - 6, h * 15 - 90);
+    const [x2, y2] = ponto(r + 6, h * 15 - 90);
+    add('line', { x1, y1, x2, y2, class: 'clock-tick' });
+    const [tx, ty] = ponto(r + 15, h * 15 - 90);
+    const t = add('text', { x: tx, y: ty, class: 'clock-h' });
+    t.textContent = `${h}h`;
+  });
+
+  // arcos de sono
+  eventos.filter((e) => e.type === 'sleep' && e.endAt).forEach((e) => {
+    const a1 = ang(Math.max(e.at, inicio));
+    const a2 = ang(Math.min(e.endAt, fim));
+    if (a2 - a1 < 0.5) return;
+    const [x1, y1] = ponto(r, a1);
+    const [x2, y2] = ponto(r, a2);
+    const grande = a2 - a1 > 180 ? 1 : 0;
+    add('path', { d: `M ${x1} ${y1} A ${r} ${r} 0 ${grande} 1 ${x2} ${y2}`, class: 'clock-sleep' });
+  });
+
+  // mamadas como pontinhos
+  eventos.filter((e) => e.type === 'feed').forEach((e) => {
+    const [x, y] = ponto(r, ang(e.at));
+    add('circle', { cx: x, cy: y, r: 3.2, class: 'clock-feed' });
+  });
+
+  // centro: total de sono do dia
+  const totalMin = S.daySummary(ref).minutosDormindo;
+  const centro = add('text', { x: cx, y: cy - 4, class: 'clock-total' });
+  centro.textContent = fmtMin(totalMin);
+  const rot = add('text', { x: cx, y: cy + 14, class: 'clock-label' });
+  rot.textContent = 'de sono';
+
+  container.append(svg);
+  const legenda = el('div', 'clock-legend');
+  legenda.innerHTML = '<span><i class="dot sleep"></i>sono</span><span><i class="dot feed"></i>mamada</span>';
+  container.append(legenda);
+}
+
 function renderAgora() {
   const cards = $('#nextCards');
   cards.innerHTML = '';
 
   if (state.activeBurp) cards.append(cardArroto());
+  if (state.activeSleep) cards.append(cardSonoAtivo());
+  else { const jc = cardJanelaSono(); if (jc) cards.append(jc); }
 
   // — próxima mamada —
   const proxima = S.nextFeedAt();
@@ -184,23 +337,11 @@ function renderAgora() {
       }));
     });
 
-  // — sono em andamento —
-  if (state.activeSleep) {
-    const dormindo = el('div', 'item');
-    dormindo.append(el('div', 'emoji', '😴'));
-    const corpo = el('div', 'item-body');
-    corpo.append(
-      el('div', 'item-title', 'Dormindo'),
-      el('div', 'item-sub', `desde ${fmtTime(state.activeSleep.startAt)} · ${fmtGap(Date.now() - state.activeSleep.startAt)}`),
-    );
-    dormindo.append(corpo);
-    cards.append(dormindo);
-  }
-
   $('#quickSonoLabel').textContent = state.activeSleep ? 'Acordou' : 'Dormiu';
   $('#quickArrotoLabel').textContent = state.activeBurp ? 'Encerrar' : 'Arroto';
 
   renderResumo($('#todayGrid'), S.daySummary());
+  renderSleepBar($('#sleepBar'));
 
   // — últimos registros —
   const recentes = $('#recentList');
@@ -482,6 +623,8 @@ function renderDiario() {
     : ref.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
   $('#dayNext').disabled = diaDiario >= 0;
   renderResumo($('#dayGrid'), resumo);
+  renderRelogioDia($('#dayClock'), ref);
+  renderSleepBar($('#daySleepBar'), ref);
 
   const linha = $('#timeline');
   linha.innerHTML = '';

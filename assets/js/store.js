@@ -87,7 +87,7 @@ export function onChange(fn) { ouvintes.add(fn); }
 
 export function save() {
   try {
-    localStorage.setItem(KEY, JSON.stringify(state));
+    if (typeof localStorage !== 'undefined') localStorage.setItem(KEY, JSON.stringify(state));
   } catch (err) {
     console.warn('Não consegui salvar:', err);
   }
@@ -226,6 +226,64 @@ export function finishBurp() {
 export function cancelBurp() {
   state.activeBurp = null;
   save();
+}
+
+/* ------------------------------------------------------------------ sono: janelas e recomendações
+ * Referências GERAIS por idade (cada bebê é único; não é conselho médico).
+ * Janela de sono = tempo acordado esperado entre as sonecas.
+ */
+const WAKE_WINDOWS = [
+  { d: 30,    min: 40,  max: 60 },   // 0–1 mês
+  { d: 60,    min: 60,  max: 90 },   // 1–2 meses
+  { d: 90,    min: 75,  max: 105 },  // 2–3 meses
+  { d: 120,   min: 90,  max: 120 },  // 3–4 meses
+  { d: 180,   min: 120, max: 165 },  // 4–6 meses
+  { d: 270,   min: 150, max: 210 },  // 6–9 meses
+  { d: 365,   min: 180, max: 240 },  // 9–12 meses
+  { d: 540,   min: 210, max: 300 },  // 12–18 meses
+  { d: 99999, min: 300, max: 360 },  // 18+ meses
+];
+const SLEEP_REC = [
+  { d: 90,    min: 14, max: 17 },  // 0–3 meses
+  { d: 365,   min: 12, max: 16 },  // 4–11 meses
+  { d: 730,   min: 11, max: 14 },  // 1–2 anos
+  { d: 1825,  min: 10, max: 13 },  // 3–5 anos
+  { d: 99999, min: 9,  max: 12 },
+];
+
+/** Idade em dias (ou null se não tem data de nascimento). */
+export function ageDays(ref = Date.now()) {
+  if (!state.baby.birth) return null;
+  const nasc = new Date(`${state.baby.birth}T00:00:00`).getTime();
+  if (Number.isNaN(nasc)) return null;
+  return Math.max(0, Math.floor((ref - nasc) / (24 * MS_HOUR)));
+}
+
+/** Janela de sono (min/max em minutos) para a idade. Sem data: assume recém-nascido. */
+export function wakeWindow(ref = Date.now()) {
+  const d = ageDays(ref) ?? 20;
+  return WAKE_WINDOWS.find((w) => d <= w.d);
+}
+
+/** Sono recomendado por 24h (min/max em horas) para a idade. */
+export function recommendedSleepH() {
+  const d = ageDays() ?? 20;
+  return SLEEP_REC.find((w) => d <= w.d);
+}
+
+/** Quando o bebê acordou pela última vez (fim do último sono concluído). */
+export function lastWakeAt() {
+  const s = lastEvent('sleep', (e) => e.endAt);
+  return s ? s.endAt : null;
+}
+
+/** Próxima soneca sugerida: { wake, start, end, window } — ou null se dormindo/sem dados. */
+export function nextNap(ref = Date.now()) {
+  if (state.activeSleep) return null;
+  const wake = lastWakeAt();
+  if (!wake) return null;
+  const w = wakeWindow(ref);
+  return { wake, start: wake + w.min * MS_MIN, end: wake + w.max * MS_MIN, window: w };
 }
 
 /* ------------------------------------------------------------------ remédios */

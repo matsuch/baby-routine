@@ -105,6 +105,31 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .quick span { font-size: 24px; }
 .quick em { font-style: normal; }
 
+/* ---------- sono (estilo Napper) ---------- */
+.sono-card .timer { color: var(--sleep); }
+
+.sleepbar { margin-top: 10px; }
+.sleepbar-top { display: flex; align-items: baseline; justify-content: space-between; font-size: 14px; margin-bottom: 8px; }
+.sleepbar-top strong { font-variant-numeric: tabular-nums; }
+.sleepbar-top .muted { font-weight: 400; font-size: 12px; }
+.sleepbar-track { height: 10px; background: var(--card-2); border-radius: 999px; overflow: hidden; }
+.sleepbar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #8f7fe0, var(--sleep)); transition: width .4s ease; }
+.sleepbar-fill.is-done { background: linear-gradient(90deg, #6fc9a4, var(--diaper)); }
+
+.clock-wrap { display: flex; justify-content: center; margin: 10px 0 6px; }
+.clock { width: 230px; max-width: 78%; height: auto; }
+.clock-track { fill: none; stroke: var(--card-2); stroke-width: 13; }
+.clock-sleep { fill: none; stroke: var(--sleep); stroke-width: 13; stroke-linecap: round; }
+.clock-feed { fill: var(--accent); }
+.clock-tick { stroke: var(--line); stroke-width: 2; }
+.clock-h { fill: var(--muted); font-size: 9px; text-anchor: middle; dominant-baseline: middle; }
+.clock-total { fill: var(--text); font-size: 22px; font-weight: 700; text-anchor: middle; font-variant-numeric: tabular-nums; }
+.clock-label { fill: var(--muted); font-size: 10px; text-anchor: middle; }
+.clock-legend { display: flex; gap: 16px; justify-content: center; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+.clock-legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+.clock-legend .dot.sleep { background: var(--sleep); }
+.clock-legend .dot.feed { background: var(--accent); }
+
 /* ---------- resumo do dia ---------- */
 .today-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(60px, 1fr)); gap: 8px; }
 .stat {
