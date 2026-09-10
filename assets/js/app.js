@@ -960,6 +960,24 @@ async function programarNtfy(horas = 10) {
   return { novos, total: linhas.length };
 }
 
+/**
+ * Reagenda os lembretes automaticamente sempre que o app abre/volta ao foco,
+ * cobrindo as próximas 12h — assim não precisa apertar o botão toda noite.
+ * Throttle de 15 min (o programarNtfy já deduplica, então repetir é barato)
+ * e roda em silêncio: nada de toast, só publica o que ainda não estava agendado.
+ */
+let ultimoReagendoNtfy = 0;
+function reagendarNtfyAuto() {
+  const ntfy = state.settings.ntfy;
+  if (!ntfy.enabled || !ntfy.topic) return;
+  const agora = Date.now();
+  if (agora - ultimoReagendoNtfy < 15 * MS_MIN) return;
+  ultimoReagendoNtfy = agora;
+  programarNtfy(12)
+    .then((r) => { if (r.novos) console.info(`ntfy: ${r.novos} lembrete(s) reagendado(s) automaticamente`); })
+    .catch((err) => console.warn('ntfy auto falhou:', err.message));
+}
+
 /** Empurra a agenda para o worker 24/7, no máximo a cada 5 min (best-effort). */
 let ultimoPush = 0;
 function sincronizarWorker(forcar = false) {
@@ -1304,7 +1322,11 @@ function ligarEventos() {
   $('#sheetBackdrop').addEventListener('click', (e) => { if (e.target.id === 'sheetBackdrop') closeSheet(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSheet(); });
 
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    render();
+    reagendarNtfyAuto();
+  });
 }
 
 /* ================================================================ boot */
@@ -1315,6 +1337,7 @@ ligarEventos();
 irPara('agora');
 setInterval(tick, 1000);
 SYNC.start();
+reagendarNtfyAuto();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
