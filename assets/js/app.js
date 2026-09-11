@@ -447,6 +447,18 @@ function linhaEvento(ev, { apagavel = true } = {}) {
   const corpo = el('div', 'item-body');
   corpo.append(el('div', 'item-title', tituloEvento(ev)), el('div', 'item-sub', subtituloEvento(ev)));
   item.append(corpo, el('div', 'item-time', fmtTime(ev.at)));
+  // Sono já concluído: toque para editar o horário (e, com isso, a duração).
+  if (ev.type === 'sleep' && ev.endAt) {
+    item.classList.add('editavel');
+    corpo.setAttribute('role', 'button');
+    corpo.setAttribute('tabindex', '0');
+    corpo.addEventListener('click', () => sheetEditarSono(ev));
+    corpo.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sheetEditarSono(ev); } });
+    const editar = el('button', 'item-edit', '✎');
+    editar.title = 'Editar sono';
+    editar.addEventListener('click', () => sheetEditarSono(ev));
+    item.append(editar);
+  }
   if (apagavel) {
     const del = el('button', 'item-del', '✕');
     del.title = 'Apagar registro';
@@ -542,6 +554,43 @@ function sheetMamadaManual() {
     toast('Mamada registrada');
   });
   openSheet('Registrar mamada passada', form);
+}
+
+/** Editar um sono já registrado: ajusta início/fim (e a duração vem daí). */
+function sheetEditarSono(ev) {
+  const form = el('form');
+  form.innerHTML = `
+    <label class="field"><span>Começou a dormir</span>
+      <input type="datetime-local" name="at" value="${toLocalInput(ev.at)}" required></label>
+    <label class="field"><span>Acordou</span>
+      <input type="datetime-local" name="end" value="${toLocalInput(ev.endAt || ev.at)}" required></label>
+    <p class="muted small" id="sonoDur" aria-live="polite"></p>
+    <button class="btn btn-primary block" type="submit">Salvar sono</button>
+    <button class="btn btn-ghost block" type="button" id="sonoDel">Apagar registro</button>`;
+
+  const aviso = form.querySelector('#sonoDur');
+  const lerHoras = () => ({ at: fromLocalInput(form.at.value), end: fromLocalInput(form.end.value) });
+  const recalcular = () => {
+    const { at, end } = lerHoras();
+    if (at && end && end > at) aviso.textContent = `Dormiu ${fmtMin((end - at) / MS_MIN)}.`;
+    else aviso.textContent = 'A hora de acordar precisa ser depois da de dormir.';
+  };
+  form.at.addEventListener('input', recalcular);
+  form.end.addEventListener('input', recalcular);
+  recalcular();
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const { at, end } = lerHoras();
+    if (!at || !end || end <= at) { toast('Confira os horários'); return; }
+    S.updateEvent(ev.id, { at, endAt: end });
+    closeSheet();
+    toast(`Sono atualizado · ${fmtMin((end - at) / MS_MIN)}`);
+  });
+  form.querySelector('#sonoDel').addEventListener('click', () => {
+    if (confirm('Apagar este sono?')) { S.removeEvent(ev.id); closeSheet(); toast('Registro apagado'); }
+  });
+  openSheet('Editar sono', form);
 }
 
 /* ================================================================ REMÉDIOS */

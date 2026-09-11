@@ -275,6 +275,10 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 .item-time { color: var(--muted); font-size: 14px; font-weight: 700; }
 .item-del { border: 0; background: none; color: var(--muted); font-size: 16px; padding: 6px 2px; margin-left: 2px; cursor: pointer; border-radius: 8px; }
 .item-del:active { color: var(--danger); }
+.item-edit { border: 0; background: none; color: var(--muted); font-size: 15px; padding: 6px 2px; margin-left: 2px; cursor: pointer; border-radius: 8px; }
+.item-edit:active { color: var(--sleep); }
+.item.editavel .item-body { cursor: pointer; }
+.item.editavel .item-body:active { opacity: .6; }
 .empty { color: var(--muted); text-align: center; padding: 26px 8px; font-size: 14px; font-weight: 600; }
 
 /* ---------- timer (mamada / arroto / sono) ---------- */
