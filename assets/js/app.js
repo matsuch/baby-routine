@@ -250,10 +250,10 @@ function renderRelogioDia(container, ref = new Date()) {
     t.textContent = `${h}h`;
   });
 
-  // arcos de sono
-  eventos.filter((e) => e.type === 'sleep' && e.endAt).forEach((e) => {
-    const a1 = ang(Math.max(e.at, inicio));
-    const a2 = ang(Math.min(e.endAt, fim));
+  // arcos de sono (segmentos já recortados no dia; inclui sono vindo da véspera)
+  S.sleepSegmentsInDay(ref).forEach((seg) => {
+    const a1 = ang(seg.at);
+    const a2 = ang(seg.endAt);
     if (a2 - a1 < 0.5) return;
     const [x1, y1] = ponto(r, a1);
     const [x2, y2] = ponto(r, a2);
@@ -324,8 +324,8 @@ function renderHero(container) {
   const add = (tag, attrs) => { const e = document.createElementNS(NS, tag); Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, v)); svg.append(e); return e; };
 
   add('circle', { cx, cy, r, class: 'hero-track' });
-  eventos.filter((e) => e.type === 'sleep' && e.endAt).forEach((e) => {
-    const a1 = ang(Math.max(e.at, inicio)); const a2 = ang(Math.min(e.endAt, fim));
+  S.sleepSegmentsInDay().forEach((seg) => {
+    const a1 = ang(seg.at); const a2 = ang(seg.endAt);
     if (a2 - a1 < 0.5) return;
     const [x1, y1] = ponto(r, a1); const [x2, y2] = ponto(r, a2);
     add('path', { d: `M ${x1} ${y1} A ${r} ${r} 0 ${a2 - a1 > 180 ? 1 : 0} 1 ${x2} ${y2}`, class: 'hero-sleep' });
@@ -452,11 +452,11 @@ function linhaEvento(ev, { apagavel = true } = {}) {
     item.classList.add('editavel');
     corpo.setAttribute('role', 'button');
     corpo.setAttribute('tabindex', '0');
-    corpo.addEventListener('click', () => sheetEditarSono(ev));
-    corpo.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sheetEditarSono(ev); } });
+    corpo.addEventListener('click', () => sheetSono(ev));
+    corpo.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sheetSono(ev); } });
     const editar = el('button', 'item-edit', '✎');
     editar.title = 'Editar sono';
-    editar.addEventListener('click', () => sheetEditarSono(ev));
+    editar.addEventListener('click', () => sheetSono(ev));
     item.append(editar);
   }
   if (apagavel) {
@@ -556,17 +556,22 @@ function sheetMamadaManual() {
   openSheet('Registrar mamada passada', form);
 }
 
-/** Editar um sono já registrado: ajusta início/fim (e a duração vem daí). */
-function sheetEditarSono(ev) {
+/**
+ * Registrar (ev = null) ou editar um sono, ajustando início/fim — a duração e
+ * os totais do dia vêm daí. Sono que cruza a meia-noite é dividido entre os dias.
+ */
+function sheetSono(ev = null) {
+  const inicioPadrao = ev ? ev.at : Date.now() - 2 * MS_HOUR;
+  const fimPadrao = ev ? (ev.endAt || ev.at) : Date.now() - 30 * MS_MIN;
   const form = el('form');
   form.innerHTML = `
     <label class="field"><span>Começou a dormir</span>
-      <input type="datetime-local" name="at" value="${toLocalInput(ev.at)}" required></label>
+      <input type="datetime-local" name="at" value="${toLocalInput(inicioPadrao)}" required></label>
     <label class="field"><span>Acordou</span>
-      <input type="datetime-local" name="end" value="${toLocalInput(ev.endAt || ev.at)}" required></label>
+      <input type="datetime-local" name="end" value="${toLocalInput(fimPadrao)}" required></label>
     <p class="muted small" id="sonoDur" aria-live="polite"></p>
     <button class="btn btn-primary block" type="submit">Salvar sono</button>
-    <button class="btn btn-ghost block" type="button" id="sonoDel">Apagar registro</button>`;
+    ${ev ? '<button class="btn btn-ghost block" type="button" id="sonoDel">Apagar registro</button>' : ''}`;
 
   const aviso = form.querySelector('#sonoDur');
   const lerHoras = () => ({ at: fromLocalInput(form.at.value), end: fromLocalInput(form.end.value) });
@@ -583,14 +588,16 @@ function sheetEditarSono(ev) {
     e.preventDefault();
     const { at, end } = lerHoras();
     if (!at || !end || end <= at) { toast('Confira os horários'); return; }
-    S.updateEvent(ev.id, { at, endAt: end });
+    if (ev) S.updateEvent(ev.id, { at, endAt: end });
+    else S.addEvent({ type: 'sleep', at, endAt: end });
     closeSheet();
-    toast(`Sono atualizado · ${fmtMin((end - at) / MS_MIN)}`);
+    toast(`${ev ? 'Sono atualizado' : 'Sono registrado'} · ${fmtMin((end - at) / MS_MIN)}`);
   });
-  form.querySelector('#sonoDel').addEventListener('click', () => {
+  const del = form.querySelector('#sonoDel');
+  if (del) del.addEventListener('click', () => {
     if (confirm('Apagar este sono?')) { S.removeEvent(ev.id); closeSheet(); toast('Registro apagado'); }
   });
-  openSheet('Editar sono', form);
+  openSheet(ev ? 'Editar sono' : 'Registrar sono passado', form);
 }
 
 /* ================================================================ REMÉDIOS */
@@ -1262,6 +1269,7 @@ function ligarEventos() {
   });
 
   $('#btnFeedManual').addEventListener('click', sheetMamadaManual);
+  $('#btnSleepManual').addEventListener('click', () => sheetSono());
   $('#btnAddMed').addEventListener('click', () => sheetMed());
 
   $('#dayPrev').addEventListener('click', () => { diaDiario -= 1; render(); });

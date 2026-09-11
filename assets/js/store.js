@@ -339,11 +339,34 @@ export function dayBounds(ref = new Date()) {
   return [inicio.getTime(), fim.getTime()];
 }
 
+/**
+ * Sono que cai DENTRO de um dia, recortado nos limites [inicio, fim).
+ * Um sono que cruza a meia-noite entra parcial em cada dia (a parte que
+ * pertence àquele dia), em vez de contar tudo no dia em que começou.
+ * Retorna segmentos { at, endAt, id } já recortados, ordenados.
+ */
+export function sleepSegmentsInDay(ref = new Date()) {
+  const [inicio, fim] = dayBounds(ref);
+  const segs = [];
+  for (const e of state.events) {
+    if (e.type !== 'sleep' || e.deleted || !e.endAt) continue;
+    const ini = Math.max(e.at, inicio);
+    const f = Math.min(e.endAt, fim);
+    if (f > ini) segs.push({ at: ini, endAt: f, id: e.id });
+  }
+  return segs.sort((a, b) => a.at - b.at);
+}
+
+/** Minutos de sono do dia (já recortados na meia-noite). */
+export function sleepMinutesInDay(ref = new Date()) {
+  const ms = sleepSegmentsInDay(ref).reduce((t, s) => t + (s.endAt - s.at), 0);
+  return Math.round(ms / MS_MIN);
+}
+
 export function daySummary(ref = new Date()) {
   const [inicio, fim] = dayBounds(ref);
   const eventos = eventsBetween(inicio, fim);
   const feeds = eventos.filter((e) => e.type === 'feed');
-  const sonos = eventos.filter((e) => e.type === 'sleep' && e.endAt);
   const fraldas = eventos.filter((e) => e.type === 'diaper');
   return {
     inicio,
@@ -355,7 +378,8 @@ export function daySummary(ref = new Date()) {
     cocos: fraldas.filter((e) => e.kind !== 'xixi').length,
     arrotos: eventos.filter((e) => e.type === 'burp').length,
     remedios: eventos.filter((e) => e.type === 'med').length,
-    minutosDormindo: sonos.reduce((t, e) => t + Math.round((e.endAt - e.at) / MS_MIN), 0),
+    // Recortado na meia-noite: sono que cruza a virada divide entre os dias.
+    minutosDormindo: sleepMinutesInDay(ref),
   };
 }
 

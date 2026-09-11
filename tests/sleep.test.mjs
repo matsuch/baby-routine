@@ -5,7 +5,10 @@
  *   node tests/sleep.test.mjs
  */
 import assert from 'node:assert';
-import { state, ageDays, wakeWindow, recommendedSleepH, nextNap, addEvent } from '../assets/js/store.js';
+import {
+  state, ageDays, wakeWindow, recommendedSleepH, nextNap, addEvent,
+  sleepMinutesInDay, sleepSegmentsInDay,
+} from '../assets/js/store.js';
 
 let falhas = 0;
 function teste(nome, fn) {
@@ -68,6 +71,21 @@ teste('nextNap: null enquanto está dormindo', () => {
   state.activeSleep = { startAt: Date.now() };
   assert.equal(nextNap(), null);
   state.activeSleep = null;
+});
+
+teste('sono que cruza a meia-noite divide os minutos entre os dois dias', () => {
+  const d15 = new Date(2026, 0, 15, 0, 0, 0, 0);         // meia-noite local do dia 15
+  const inicioSono = new Date(2026, 0, 15, 23, 0, 0, 0);  // 23:00 do dia 15
+  const fimSono = new Date(2026, 0, 16, 1, 0, 0, 0);      // 01:00 do dia 16
+  state.events = [{ type: 'sleep', at: inicioSono.getTime(), endAt: fimSono.getTime() }];
+  // Dia 15 fica só com 1h (23:00–00:00); dia 16 com 1h (00:00–01:00).
+  assert.equal(sleepMinutesInDay(d15), 60, 'dia 15 deveria contar só a parte antes da meia-noite');
+  assert.equal(sleepMinutesInDay(new Date(2026, 0, 16, 12, 0, 0)), 60, 'dia 16 deveria contar a parte depois da meia-noite');
+  // e cada dia enxerga o segmento recortado (não o sono inteiro)
+  const seg15 = sleepSegmentsInDay(d15);
+  assert.equal(seg15.length, 1);
+  assert.equal(seg15[0].endAt, d15.getTime() + 24 * 3600000, 'o segmento do dia 15 termina na meia-noite');
+  state.events = [];
 });
 
 if (falhas) { console.error(`\n${falhas} teste(s) falharam.`); process.exit(1); }
