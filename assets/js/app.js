@@ -312,7 +312,19 @@ function focusChip(emoji, tone, label, valor) {
  * entrada não se repetem a cada segundo. Toda a lógica de dados/estados
  * (heroFoco, sono, mamadas, marcador de agora) é preservada. */
 const HERO_NS = 'http://www.w3.org/2000/svg';
-const HERO = { vb: 280, cx: 140, cy: 140, R: 106, rLabel: 126 };
+const HERO = { vb: 280, cx: 140, cy: 140, R: 100, rLabel: 113 };
+
+/**
+ * Âncora do rótulo conforme o quadrante: nas laterais o texto "sai" da órbita
+ * (start/end) e no topo/base fica centrado — assim ele parece preso ao ponto
+ * do evento, e não solto ao redor do círculo.
+ */
+function heroAnchor(deg) {
+  const ux = Math.cos((deg * Math.PI) / 180);
+  if (ux > 0.3) return 'start';
+  if (ux < -0.3) return 'end';
+  return 'middle';
+}
 
 function svgEl(tag, attrs = {}) {
   const e = document.createElementNS(HERO_NS, tag);
@@ -345,43 +357,47 @@ function montarHero(container, { foco, inicio, fim, feeds, segs }) {
   const svg = svgEl('svg', { viewBox: `0 0 ${vb} ${vb}`, class: 'hero-ring is-enter' });
 
   const defs = svgEl('defs');
-  defs.innerHTML = '<filter id="heroGlow" x="-60%" y="-60%" width="220%" height="220%">'
-    + '<feGaussianBlur stdDeviation="2.4" result="b"/>'
-    + '<feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>';
+  // Gradiente por arco (bbox próprio): variação de opacidade bem sutil no sono.
+  defs.innerHTML = '<linearGradient id="heroSleepGrad" x1="0" y1="0" x2="0" y2="1">'
+    + '<stop offset="0" style="stop-color:var(--sleep,#bab4ff);stop-opacity:.95"/>'
+    + '<stop offset="1" style="stop-color:var(--sleep,#bab4ff);stop-opacity:.55"/></linearGradient>';
   svg.append(defs);
 
   svg.append(svgEl('circle', { cx, cy, r: R, class: 'hero-track' }));
 
-  // marcas discretas de orientação (0/6/12/18h)
-  [0, 6, 12, 18].forEach((h) => {
-    const deg = (h / 24) * 360 - 90;
-    const [x1, y1] = heroPonto(R - 3.5, deg); const [x2, y2] = heroPonto(R + 3.5, deg);
-    svg.append(svgEl('line', { x1, y1, x2, y2, class: 'hero-tick' }));
-  });
+  // micro-partículas: uma por hora, levemente maiores a cada 6h
+  for (let h = 0; h < 24; h += 1) {
+    const [x, y] = heroPonto(R, (h / 24) * 360 - 90);
+    const marco = h % 6 === 0;
+    svg.append(svgEl('circle', { cx: x, cy: y, r: marco ? 1.1 : 0.7, class: marco ? 'hero-dot6' : 'hero-dot' }));
+  }
 
-  // arcos de sono (finos, cantos arredondados, lilás suave)
+  // sono: halo largo + arco fino por cima (grupo para animar junto)
   segs.forEach((seg, i) => {
     const a1 = heroAng(seg.at, inicio); const a2 = heroAng(seg.endAt, inicio);
     if (a2 - a1 < 0.6) return;
     const [x1, y1] = heroPonto(R, a1); const [x2, y2] = heroPonto(R, a2);
-    svg.append(svgEl('path', {
-      d: `M ${x1} ${y1} A ${R} ${R} 0 ${a2 - a1 > 180 ? 1 : 0} 1 ${x2} ${y2}`,
-      class: 'hero-sleep', style: `--i:${i}`,
-    }));
+    const d = `M ${x1} ${y1} A ${R} ${R} 0 ${a2 - a1 > 180 ? 1 : 0} 1 ${x2} ${y2}`;
+    const g = svgEl('g', { class: 'hero-sleep-g', style: `--i:${i}` });
+    g.append(svgEl('path', { d, class: 'hero-sleep-glow' }));
+    g.append(svgEl('path', { d, class: 'hero-sleep' }));
+    svg.append(g);
   });
 
-  // mamadas: orb translúcido + ícone pequeno
+  // mamadas: pequeno satélite sobre a órbita (halo + anel fino + ícone)
   feeds.forEach((e, i) => {
     const [x, y] = heroPonto(R, heroAng(e.at, inicio));
     const outer = svgEl('g', { transform: `translate(${x} ${y})` });
     const inner = svgEl('g', { class: 'hero-mark', style: `--i:${i}` });
-    inner.append(svgEl('circle', { r: 8.4, class: 'hero-orb' }));
-    const ic = iconeMamadeira(); ic.setAttribute('transform', 'scale(0.6)');
+    inner.append(svgEl('circle', { r: 7.2, class: 'hero-orb' }));
+    inner.append(svgEl('circle', { r: 7.2, class: 'hero-orb-ring' }));
+    const ic = iconeMamadeira(); ic.setAttribute('transform', 'scale(0.5)');
     inner.append(ic);
     outer.append(inner); svg.append(outer);
   });
 
-  // horários relevantes: início de cada soneca + o próximo evento (deduplicados)
+  // horários relevantes: início de cada soneca + o próximo evento (deduplicados),
+  // cada um com um fio pontilhado curto ligando o texto à órbita.
   const labels = segs.map((seg) => ({ deg: heroAng(seg.at, inicio), t: seg.at }));
   if (foco.at && foco.at >= inicio && foco.at < fim) labels.push({ deg: heroAng(foco.at, inicio), t: foco.at, foco: true });
   labels.sort((a, b) => a.deg - b.deg);
@@ -389,10 +405,12 @@ function montarHero(container, { foco, inicio, fim, feeds, segs }) {
   labels.forEach((L) => {
     if (!L.foco && L.deg - ultimo < 16) return; // não amontoa
     ultimo = L.deg;
+    const [g1x, g1y] = heroPonto(R + 3.5, L.deg); const [g2x, g2y] = heroPonto(R + 8, L.deg);
+    svg.append(svgEl('line', { x1: g1x, y1: g1y, x2: g2x, y2: g2y, class: `hero-lead${L.foco ? ' is-foco' : ''}` }));
     const [lx, ly] = heroPonto(rLabel, L.deg);
     const txt = svgEl('text', {
       x: lx, y: ly, class: `hero-tlabel${L.foco ? ' is-foco' : ''}`,
-      'text-anchor': 'middle', 'dominant-baseline': 'middle',
+      'text-anchor': heroAnchor(L.deg), 'dominant-baseline': 'middle',
     });
     txt.textContent = fmtTime(L.t);
     svg.append(txt);
@@ -401,22 +419,23 @@ function montarHero(container, { foco, inicio, fim, feeds, segs }) {
   // marcador do próximo evento (foco)
   if (foco.at && foco.at >= inicio && foco.at < fim) {
     const [mx, my] = heroPonto(R, heroAng(foco.at, inicio));
-    svg.append(svgEl('circle', { cx: mx, cy: my, r: 9, class: 'hero-foco-halo', fill: cor }));
-    svg.append(svgEl('circle', { cx: mx, cy: my, r: 3.6, class: 'hero-foco-dot', fill: cor }));
+    svg.append(svgEl('circle', { cx: mx, cy: my, r: 7.5, class: 'hero-foco-halo', fill: cor }));
+    svg.append(svgEl('circle', { cx: mx, cy: my, r: 3, class: 'hero-foco-dot', fill: cor }));
   }
 
   // marcador de AGORA: desenhado no topo e rotacionado (atualizado no tick)
   const nowG = svgEl('g', { class: 'hero-now-g' });
-  const [t1x, t1y] = heroPonto(R - 11, -90); const [t2x, t2y] = heroPonto(R - 3, -90);
+  const [t1x, t1y] = heroPonto(R - 8, -90); const [t2x, t2y] = heroPonto(R - 3.5, -90);
   nowG.append(svgEl('line', { x1: t1x, y1: t1y, x2: t2x, y2: t2y, class: 'hero-now-tick' }));
-  nowG.append(svgEl('circle', { cx, cy: cy - R, r: 6.5, class: 'hero-now-halo' }));
-  nowG.append(svgEl('circle', { cx, cy: cy - R, r: 3, class: 'hero-now-dot' }));
+  nowG.append(svgEl('circle', { cx, cy: cy - R, r: 8, class: 'hero-now-pulse' }));
+  nowG.append(svgEl('circle', { cx, cy: cy - R, r: 4.6, class: 'hero-now-ring' }));
+  nowG.append(svgEl('circle', { cx, cy: cy - R, r: 2.2, class: 'hero-now-dot' }));
   svg.append(nowG);
 
-  // centro (hierarquia: rótulo pequeno · número dominante · horário menor)
-  const tl = svgEl('text', { x: cx, y: cy - 19, class: 'hero-label', 'text-anchor': 'middle' });
-  const tb = svgEl('text', { x: cx, y: cy + 9, class: 'hero-big', 'text-anchor': 'middle', fill: cor });
-  const ts = svgEl('text', { x: cx, y: cy + 31, class: 'hero-sub', 'text-anchor': 'middle' });
+  // centro (hierarquia: rótulo secundário · número principal · horário secundário)
+  const tl = svgEl('text', { x: cx, y: cy - 17, class: 'hero-label', 'text-anchor': 'middle' });
+  const tb = svgEl('text', { x: cx, y: cy + 8, class: 'hero-big', 'text-anchor': 'middle', fill: cor });
+  const ts = svgEl('text', { x: cx, y: cy + 27, class: 'hero-sub', 'text-anchor': 'middle' });
   svg.append(tl, tb, ts);
 
   container.append(svg);
