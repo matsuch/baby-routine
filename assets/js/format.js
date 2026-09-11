@@ -12,6 +12,18 @@ export function fmtDate(ts) {
   return new Date(ts).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 }
 
+/** Data + hora curtas: "11/09 14:00" (hoje/amanhã viram palavra). */
+export function fmtDateTime(ts) {
+  const d = new Date(ts);
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const dia = new Date(d); dia.setHours(0, 0, 0, 0);
+  const difDias = Math.round((dia - hoje) / (24 * MS_HOUR));
+  if (difDias === 0) return `hoje ${fmtTime(ts)}`;
+  if (difDias === 1) return `amanhã ${fmtTime(ts)}`;
+  if (difDias === -1) return `ontem ${fmtTime(ts)}`;
+  return `${fmtDate(ts)} ${fmtTime(ts)}`;
+}
+
 /** 95 -> "1h35" · 40 -> "40min" */
 export function fmtMin(min) {
   const m = Math.max(0, Math.round(min));

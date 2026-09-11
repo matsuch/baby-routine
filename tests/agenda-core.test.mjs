@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert';
 import {
-  nextFeedAt, nextDoseAt, dueReminders, localTimeToday, MS_MIN, MS_HOUR,
+  nextFeedAt, dueAlertAt, dueReminders, localTimeToday, MS_MIN, MS_HOUR,
 } from '../lib/agenda-core.mjs';
 
 let falhas = 0;
@@ -16,7 +16,8 @@ function teste(nome, fn) {
 const perfilBase = () => ({
   baby: { name: 'Teresa' },
   settings: { feedIntervalMin: 180, ntfy: { enabled: true, topic: 't' } },
-  meds: [{ id: 'med-x', name: 'Paracetamol', intervalHours: 8, active: true }],
+  // Recorrente a cada 8h ancorado em 02:00; às 10:00 vence uma ocorrência.
+  meds: [{ id: 'med-x', name: 'Paracetamol', category: 'remedio', startAt: 2 * MS_HOUR, repeat: { every: 8, unit: 'hour' }, active: true }],
 });
 
 teste('nextFeedAt = fim da última mamada + intervalo', () => {
@@ -25,11 +26,17 @@ teste('nextFeedAt = fim da última mamada + intervalo', () => {
   assert.equal(nextFeedAt(perfilBase(), evs), now); // -180min + 180min = now
 });
 
-teste('nextDoseAt = última dose + intervalo do remédio', () => {
-  const now = 10 * MS_HOUR;
-  const med = { id: 'med-x', intervalHours: 8 };
-  const evs = [{ type: 'med', medId: 'med-x', at: now - 8 * MS_HOUR }];
-  assert.equal(nextDoseAt(med, evs), now);
+teste('dueAlertAt: recorrente devolve a ocorrência vencendo agora', () => {
+  const med = { startAt: 2 * MS_HOUR, repeat: { every: 8, unit: 'hour' }, active: true };
+  assert.equal(dueAlertAt(med, 10 * MS_HOUR), 10 * MS_HOUR, 'ocorrência 02:00+8h = 10:00');
+  assert.equal(dueAlertAt(med, 12 * MS_HOUR), 10 * MS_HOUR, 'ainda é a de 10:00 até chegar 18:00');
+  assert.equal(dueAlertAt(med, 1 * MS_HOUR), null, 'antes da 1ª ocorrência não vence nada');
+});
+
+teste('dueAlertAt: data marcada (sem repetição) só vence depois da hora', () => {
+  const med = { startAt: 10 * MS_HOUR, repeat: null, active: true };
+  assert.equal(dueAlertAt(med, 9 * MS_HOUR), null, 'antes da hora, nada');
+  assert.equal(dueAlertAt(med, 10 * MS_HOUR), 10 * MS_HOUR, 'na hora, vence');
 });
 
 teste('localTimeToday: 14:00 no fuso -180 (Brasil) = 17:00 UTC', () => {
@@ -78,8 +85,9 @@ teste('dueReminders: troca em horário fixo entra no horário certo', () => {
 });
 
 teste('dueReminders: nada vencido = lista vazia (fora de horário)', () => {
-  const now = Date.UTC(2026, 0, 15, 15, 30, 0); // 12:30 BRT, sem troca fixa, sem mamada/dose
-  const r = dueReminders(perfilBase(), [], { now });
+  const now = Date.UTC(2026, 0, 15, 15, 30, 0); // 12:30 BRT, sem troca fixa, sem mamada
+  const perfil = { ...perfilBase(), meds: [] }; // sem alertas para isolar o caso
+  const r = dueReminders(perfil, [], { now });
   assert.equal(r.length, 0);
 });
 

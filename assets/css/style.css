@@ -324,6 +324,11 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--sleep); }
 .switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; font-weight: 700; }
 .switch input { width: 24px; height: 24px; accent-color: var(--accent); flex: none; }
+/* linha "A cada [n] [unidade]" no cadastro de alerta */
+.freq-row { display: flex; align-items: center; gap: 10px; }
+.freq-row > span { display: inline; margin-bottom: 0; white-space: nowrap; }
+.freq-row .freq-num { width: 84px; flex: none; }
+.freq-row select { flex: 1; }
 .disclaimer { color: var(--muted); font-size: 12px; line-height: 1.55; font-weight: 600; margin-top: 18px; }
 
 /* ---------- abas ---------- */

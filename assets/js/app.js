@@ -2,7 +2,7 @@
 import * as S from './store.js';
 import { MS_MIN, MS_HOUR, state } from './store.js';
 import {
-  countdown, describeFeed, fmtAge, fmtDate, fmtGap, fmtMin, fmtTime,
+  countdown, describeFeed, fmtAge, fmtDate, fmtDateTime, fmtGap, fmtMin, fmtTime,
   fromLocalInput, pad, SIDE_LABEL, toLocalInput,
 } from './format.js';
 import * as WA from './wa.js';
@@ -369,14 +369,14 @@ function renderAgora() {
 
   // — próximos alertas (remédios, consultas…) —
   state.meds
-    .filter((m) => m.active !== false && S.nextDoseAt(m))
-    .map((m) => ({ med: m, at: S.nextDoseAt(m) }))
+    .map((m) => ({ med: m, at: S.nextAlertAt(m) }))
+    .filter(({ at }) => at != null)
     .sort((a, b) => a.at - b.at)
     .slice(0, 3)
     .forEach(({ med, at }) => {
       cards.append(cartaoProximo({
         emoji: catInfo(med.category).emoji, titulo: med.name,
-        sub: `${fmtTime(at)} · a cada ${med.intervalHours}h${med.dose ? ` · ${med.dose}` : ''}`,
+        sub: `${fmtDateTime(at)}${med.repeat ? ` · ${repeatLabel(med)}` : ''}${med.dose ? ` · ${med.dose}` : ''}`,
         at, onClick: () => irPara('remedios'),
       }));
     });
@@ -450,6 +450,22 @@ const CATEGORIAS = [
   { id: 'outro', label: 'Outro', emoji: '🔔', tint: 'plain' },
 ];
 const catInfo = (id) => CATEGORIAS.find((c) => c.id === id) || CATEGORIAS[0];
+
+const UNIDADES = [
+  { id: 'hour', label: 'horas', sing: 'hora' },
+  { id: 'day', label: 'dias', sing: 'dia' },
+  { id: 'week', label: 'semanas', sing: 'semana' },
+  { id: 'month', label: 'meses', sing: 'mês' },
+];
+
+/** "a cada 8h" · "a cada 2 dias" · "uma vez" (sem repetição). */
+function repeatLabel(med) {
+  if (!med.repeat) return 'uma vez';
+  const { every, unit } = med.repeat;
+  if (unit === 'hour') return `a cada ${every}h`;
+  const u = UNIDADES.find((x) => x.id === unit) || UNIDADES[0];
+  return `a cada ${every === 1 ? '' : `${every} `}${every === 1 ? u.sing : u.label}`;
+}
 
 function linhaEvento(ev, { apagavel = true } = {}) {
   const item = el('div', 'item');
@@ -631,27 +647,31 @@ function renderRemedios() {
     const texto = el('div', 'med-head-text');
     texto.append(
       el('div', 'med-name', med.name),
-      el('div', 'med-meta', `${cat.label} · a cada ${med.intervalHours}h${med.dose ? ` · ${med.dose}` : ''}`),
+      el('div', 'med-meta', `${cat.label} · ${repeatLabel(med)}${med.dose ? ` · ${med.dose}` : ''}`),
     );
     head.append(texto);
     card.append(head);
 
     const dose = S.lastDose(med.id);
-    const prox = S.nextDoseAt(med);
+    const prox = S.nextAlertAt(med);
     const quando = el('div', 'med-when');
     if (prox) {
       const info = countdown(prox);
       if (info.state !== 'ok') quando.classList.add(info.state === 'late' ? 'is-late' : 'is-due');
-      quando.textContent = `Próximo ${fmtTime(prox)} (${info.label}) · último ${fmtTime(dose.at)}`;
+      const ultimo = dose ? ` · último ${fmtDateTime(dose.at)}` : '';
+      quando.textContent = `Próximo ${fmtDateTime(prox)} (${info.label})${ultimo}`;
     } else {
-      quando.textContent = 'Sem registro ainda';
+      quando.textContent = dose ? `Concluído · ${fmtDateTime(dose.at)}` : 'Sem data definida';
     }
     card.append(quando);
 
     const acoes = el('div', 'med-actions');
-    const tomar = el('button', 'btn btn-primary', prox ? 'Registrei agora' : 'Registrar 1º');
+    // Data marcada (sem repetição): "Concluir" registra e encerra o alerta.
+    const rotulo = med.repeat ? 'Registrei agora' : 'Concluir';
+    const tomar = el('button', 'btn btn-primary', rotulo);
     tomar.addEventListener('click', () => {
       S.takeMed(med);
+      if (!med.repeat) S.saveMed({ id: med.id, active: false }); // one-off vira concluído
       vibrar();
       toast(`${med.name} registrado às ${fmtTime(Date.now())}`);
     });
@@ -686,20 +706,38 @@ function sheetDoseHorario(med) {
 
 function sheetMed(med = null) {
   const categoriaAtual = med ? (med.category || 'remedio') : 'remedio';
-  const opcoes = CATEGORIAS
+  const catOpc = CATEGORIAS
     .map((c) => `<option value="${c.id}"${c.id === categoriaAtual ? ' selected' : ''}>${c.emoji} ${c.label}</option>`)
     .join('');
+  const repetir = med ? !!med.repeat : true; // novo alerta já vem como recorrente
+  const every = med && med.repeat ? med.repeat.every : 8;
+  const unit = med && med.repeat ? med.repeat.unit : 'hour';
+  const unitOpc = UNIDADES.map((u) => `<option value="${u.id}"${u.id === unit ? ' selected' : ''}>${u.label}</option>`).join('');
+  const quando = toLocalInput(med && med.startAt ? med.startAt : Date.now());
+
   const form = el('form');
   form.innerHTML = `
     <label class="field"><span>Categoria</span>
-      <select name="category">${opcoes}</select></label>
+      <select name="category">${catOpc}</select></label>
     <label class="field"><span>Nome</span>
       <input type="text" name="name" value="${med ? med.name : ''}" placeholder="Ex.: Cefalexina" required></label>
-    <label class="field"><span>Intervalo (horas)</span>
-      <input type="number" name="intervalHours" value="${med ? med.intervalHours : 8}" min="1" max="8760" inputmode="numeric" required></label>
+    <label class="field"><span>Data e hora</span>
+      <input type="datetime-local" name="startAt" value="${quando}" required></label>
+    <label class="switch">
+      <span>Repetir</span>
+      <input type="checkbox" name="repetir" ${repetir ? 'checked' : ''}></label>
+    <div class="field freq-row" id="freqRow"${repetir ? '' : ' hidden'}>
+      <span>A cada</span>
+      <input type="number" name="every" value="${every}" min="1" max="999" inputmode="numeric" class="freq-num">
+      <select name="unit">${unitOpc}</select>
+    </div>
     <label class="field"><span>Descrição (opcional)</span>
-      <input type="text" name="dose" value="${med ? med.dose || '' : ''}" placeholder="Ex.: 1 comprimido, jejum, pediatra…"></label>
+      <input type="text" name="dose" value="${med ? med.dose || '' : ''}" placeholder="Ex.: 1 comprimido, jejum, Dra. Ana…"></label>
     <button class="btn btn-primary block" type="submit">Salvar</button>`;
+
+  form.querySelector('input[name="repetir"]').addEventListener('change', (e) => {
+    form.querySelector('#freqRow').hidden = !e.target.checked;
+  });
 
   if (med) {
     const apagar = el('button', 'btn btn-danger block', 'Apagar alerta');
@@ -717,11 +755,17 @@ function sheetMed(med = null) {
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     const d = Object.fromEntries(new FormData(form));
+    const startAt = fromLocalInput(d.startAt);
+    if (!startAt) { toast('Confira a data e hora'); return; }
+    const repeat = d.repetir
+      ? { every: Math.max(1, Number(d.every) || 1), unit: d.unit }
+      : null;
     S.saveMed({
       id: med ? med.id : undefined,
       category: d.category,
       name: d.name.trim(),
-      intervalHours: Math.max(1, Number(d.intervalHours) || 8),
+      startAt,
+      repeat,
       dose: d.dose.trim(),
       active: true,
     });
@@ -987,13 +1031,13 @@ function checarAvisos() {
   }
 
   state.meds.filter((m) => m.active !== false).forEach((med) => {
-    const prox = S.nextDoseAt(med);
-    if (!prox || agora < prox || agora - prox > 30 * MS_MIN) return;
-    const chave = `med:${med.id}:${prox}`;
+    const occ = S.dueAlertAt(med); // ocorrência vencendo agora
+    if (!occ || agora - occ > 30 * MS_MIN) return;
+    const chave = `med:${med.id}:${occ}`;
     if (avisados.has(chave)) return;
     marcarAviso(chave);
     const emoji = catInfo(med.category).emoji;
-    const corpo = med.dose || `A cada ${med.intervalHours}h.`;
+    const corpo = med.dose || repeatLabel(med);
     avisar(`${med.name} ${emoji}`, corpo, chave);
     avisarWhatsApp(`${emoji} ${med.name}. ${corpo}`);
     avisarNtfy(`${emoji} ${med.name}. ${corpo}`);

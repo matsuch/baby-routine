@@ -107,11 +107,14 @@ try {
   await page.click('#btnAddMed');
   await page.selectOption('#sheetBody select[name="category"]', 'consulta');
   await page.fill('#sheetBody input[name="name"]', 'Consulta pediatra');
-  await page.fill('#sheetBody input[name="intervalHours"]', '720');
-  await page.click('#sheetBody button[type="submit"]');
+  await page.uncheck('#sheetBody input[name="repetir"]'); // data marcada, sem recorrência
+  checar(await page.locator('#sheetBody #freqRow').isHidden(), 'frequência não some ao desmarcar Repetir');
+  await page.click('#sheetBody button[type="submit"]'); // data/hora já vem preenchida com agora
   checar(await page.locator('.med').count() === 4, 'alerta novo não foi salvo');
   checar((await page.locator('.med .chip').allTextContents()).some((t) => t.includes('🩺')),
     'categoria (emoji) não apareceu no card do alerta');
+  checar((await page.locator('.med-meta').allTextContents()).some((t) => t.includes('uma vez')),
+    'alerta de data marcada deveria mostrar "uma vez"');
   await shot('remedios.png');
 
   // agenda projetada

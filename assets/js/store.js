@@ -14,9 +14,9 @@ export const MS_HOUR = 3600000;
  * perfil não fique em ping-pong na sincronização.
  */
 const MEDS_PADRAO = [
-  { id: 'med-cefalexina', name: 'Cefalexina', category: 'remedio', intervalHours: 6, dose: '', who: 'mãe' },
-  { id: 'med-paracetamol', name: 'Paracetamol', category: 'remedio', intervalHours: 8, dose: '', who: 'mãe' },
-  { id: 'med-profenid', name: 'Profenid', category: 'remedio', intervalHours: 12, dose: '', who: 'mãe' },
+  { id: 'med-cefalexina', name: 'Cefalexina', category: 'remedio', repeat: { every: 6, unit: 'hour' }, dose: '' },
+  { id: 'med-paracetamol', name: 'Paracetamol', category: 'remedio', repeat: { every: 8, unit: 'hour' }, dose: '' },
+  { id: 'med-profenid', name: 'Profenid', category: 'remedio', repeat: { every: 12, unit: 'hour' }, dose: '' },
 ];
 
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -54,7 +54,7 @@ function estadoInicial() {
         tzOffsetMin: -180, // fuso da família (Brasil, sem horário de verão)
       },
     },
-    meds: MEDS_PADRAO.map((m) => ({ active: true, ...m })),
+    meds: MEDS_PADRAO.map((m) => ({ active: true, startAt: Date.now(), ...m })),
     events: [],
     activeFeed: null,   // { startAt, side, segments: [{side, min}] }
     activeSleep: null,  // { startAt }
@@ -71,9 +71,19 @@ function migrar(dados) {
   s.settings.ntfy = { ...base.settings.ntfy, ...((dados.settings || {}).ntfy || {}) };
   s.settings.reminders = { ...base.settings.reminders, ...((dados.settings || {}).reminders || {}) };
   s.meds = Array.isArray(dados.meds) ? dados.meds : base.meds;
-  // Alertas antigos (sem categoria) eram todos remédio.
-  s.meds.forEach((m) => { if (!m.category) m.category = 'remedio'; });
   s.events = Array.isArray(dados.events) ? dados.events : [];
+  // Normaliza alertas antigos: categoria, recorrência e data/hora âncora.
+  s.meds.forEach((m) => {
+    if (!m.category) m.category = 'remedio';
+    if (m.repeat === undefined) {
+      m.repeat = m.intervalHours ? { every: m.intervalHours, unit: 'hour' } : { every: 8, unit: 'hour' };
+    }
+    if (!m.startAt) {
+      // Ancora na última dose registrada; se não houver, em agora.
+      const doses = s.events.filter((e) => e.type === 'med' && e.medId === m.id && !e.deleted);
+      m.startAt = doses.length ? Math.max(...doses.map((e) => e.at)) : Date.now();
+    }
+  });
   return s;
 }
 
@@ -299,10 +309,50 @@ export function lastDose(medId) {
   return lastEvent('med', (e) => e.medId === medId);
 }
 
-export function nextDoseAt(med) {
-  const dose = lastDose(med.id);
-  if (!dose) return null;
-  return dose.at + med.intervalHours * MS_HOUR;
+const UNIT_MS = { hour: MS_HOUR, day: 24 * MS_HOUR, week: 7 * 24 * MS_HOUR };
+
+/** Avança um timestamp em `every` unidades (mês usa calendário). */
+export function addUnit(ts, every, unit) {
+  if (unit === 'month') { const d = new Date(ts); d.setMonth(d.getMonth() + every); return d.getTime(); }
+  return ts + every * (UNIT_MS[unit] || MS_HOUR);
+}
+
+/**
+ * Próxima ocorrência de um alerta a partir de `ref`.
+ *  - sem repetição (data marcada): devolve a data agendada (mesmo se já passou,
+ *    para o card mostrar "atrasado" até ser concluído);
+ *  - com repetição: a menor ocorrência >= ref (a partir de startAt).
+ * Devolve null se o alerta não tem data ou está inativo.
+ */
+export function nextAlertAt(med, ref = Date.now()) {
+  if (!med || !med.startAt || med.active === false) return null;
+  if (!med.repeat) return med.startAt;
+  if (med.startAt >= ref) return med.startAt;
+  const { every, unit } = med.repeat;
+  if (unit === 'month') {
+    let occ = med.startAt; let guarda = 0;
+    while (occ < ref && guarda < 2400) { occ = addUnit(occ, every, unit); guarda += 1; }
+    return occ;
+  }
+  const passo = every * UNIT_MS[unit] || MS_HOUR;
+  const k = Math.ceil((ref - med.startAt) / passo);
+  return med.startAt + k * passo;
+}
+
+/** Ocorrência que está vencendo AGORA (a última <= ref), para os lembretes. */
+export function dueAlertAt(med, ref = Date.now()) {
+  if (!med || !med.startAt || med.active === false) return null;
+  if (!med.repeat) return med.startAt <= ref ? med.startAt : null;
+  if (med.startAt > ref) return null;
+  const { every, unit } = med.repeat;
+  if (unit === 'month') {
+    let occ = med.startAt;
+    while (addUnit(occ, every, unit) <= ref) occ = addUnit(occ, every, unit);
+    return occ;
+  }
+  const passo = every * UNIT_MS[unit] || MS_HOUR;
+  const k = Math.floor((ref - med.startAt) / passo);
+  return med.startAt + k * passo;
 }
 
 export function takeMed(med, at = Date.now()) {
@@ -403,12 +453,17 @@ export function agenda(horas = 24) {
   }
 
   state.meds.filter((m) => m.active !== false).forEach((med) => {
-    let prox = nextDoseAt(med);
-    if (!prox) return;
-    const passo = med.intervalHours * MS_HOUR;
-    while (prox < agora) prox += passo;
-    for (let t = prox; t <= limite; t += passo) {
-      linhas.push({ at: t, emoji: '💊', text: `${med.name}${med.dose ? ` · ${med.dose}` : ''}` });
+    const prox = nextAlertAt(med, agora);
+    if (prox == null) return;
+    const texto = `${med.name}${med.dose ? ` · ${med.dose}` : ''}`;
+    if (!med.repeat) {
+      if (prox <= limite) linhas.push({ at: prox, emoji: '🔔', text: texto });
+      return;
+    }
+    const { every, unit } = med.repeat;
+    let guarda = 0;
+    for (let t = prox; t <= limite && guarda < 500; t = addUnit(t, every, unit), guarda += 1) {
+      linhas.push({ at: t, emoji: '🔔', text: texto });
     }
   });
 
