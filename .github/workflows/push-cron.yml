@@ -1,0 +1,41 @@
+# Despertador dos avisos automáticos.
+#
+# NÃO hospeda nada (o app está na Vercel). Este workflow só "cutuca" o endpoint
+# /api/cron na Vercel de tempos em tempos; é lá que os pushes são calculados e
+# enviados pelo ntfy, sempre a partir do estado atual da rotina.
+#
+# Precisa de 1 segredo no repositório (Settings → Secrets and variables →
+# Actions → New repository secret):
+#   PUSH_CRON_SECRET  — o mesmo valor configurado na Vercel
+# Opcional:
+#   PUSH_CRON_URL     — se o domínio da Vercel mudar (padrão abaixo)
+#
+# Obs.: o GitHub pode atrasar/agrupar os disparos agendados, e desliga o cron
+# após ~60 dias sem atividade no repositório — reative em Actions se isso ocorrer.
+name: Avisos automáticos (cron)
+
+on:
+  schedule:
+    - cron: '*/10 * * * *' # a cada 10 min (melhor esforço do GitHub)
+  workflow_dispatch: {} # permite disparar manualmente para testar
+
+concurrency:
+  group: push-cron
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Disparar /api/cron na Vercel
+        env:
+          CRON_URL: ${{ secrets.PUSH_CRON_URL }}
+          CRON_SECRET: ${{ secrets.PUSH_CRON_SECRET }}
+        run: |
+          URL="${CRON_URL:-https://baby-routine-three.vercel.app/api/cron}"
+          code=$(curl -sS -m 30 -o /tmp/cron_out -w '%{http_code}' \
+            -H "Authorization: Bearer ${CRON_SECRET}" "$URL" || echo 000)
+          echo "HTTP $code"
+          cat /tmp/cron_out 2>/dev/null || true
+          echo
+          test "$code" = "200"

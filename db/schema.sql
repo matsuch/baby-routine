@@ -17,3 +17,13 @@ create table if not exists events (
 );
 
 create index if not exists events_family_updated on events (family_key, updated_at);
+
+-- Dedup dos avisos automáticos: garante que cada lembrete (mamada/remédio/troca)
+-- vá pro ntfy uma vez só, mesmo com o /api/cron rodando a cada poucos minutos.
+-- Criada pela função /api/cron. `key` identifica o lembrete (ex.: feed:<epoch>).
+create table if not exists sent_pushes (
+  family_key text not null,
+  key        text not null,
+  sent_at    timestamptz not null default now(),
+  primary key (family_key, key)
+);

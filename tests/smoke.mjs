@@ -167,13 +167,15 @@ try {
   const push = await page.evaluate(() => window.__ntfy[0]);
   checar(push.url === `https://ntfy.sh/${topicoGerado}`, `URL do ntfy errada: ${push.url}`);
   checar(typeof push.body === 'string' && push.body.includes('Teste'), 'corpo do push errado');
-  // programar lembretes -> usa entrega agendada (header Delay presente)
-  await page.evaluate(() => { window.__ntfy = []; });
-  await page.click('#ntfySchedule');
-  await page.waitForFunction(() => window.__ntfy && window.__ntfy.length > 0, { timeout: 4000 });
-  const agendados = await page.evaluate(() => window.__ntfy);
-  checar(agendados.every((c) => c.headers.Delay && Number(c.headers.Delay) > 0),
-    'lembrete programado sem header Delay (entrega agendada)');
+  // horários fixos de troca: são lidos e normalizados no perfil (que sincroniza
+  // pro servidor, onde o /api/cron os usa para lembrar de anotar as trocas).
+  await page.fill('#ntfyDiaper', '8h, 14:00, 22:30');
+  await page.dispatchEvent('#ntfyDiaper', 'change');
+  const trocas = await page.evaluate(
+    () => JSON.parse(localStorage.getItem('rotina-bebe:v1')).settings.reminders.diaperTimes,
+  );
+  checar(Array.isArray(trocas) && trocas.join(',') === '08:00,14:00,22:30',
+    `horários de troca não foram normalizados: ${trocas}`);
 
   // sincronização entre celulares: liga (gera código) e empurra pro /api/sync (stubado)
   await page.evaluate(() => {

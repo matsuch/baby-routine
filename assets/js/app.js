@@ -810,6 +810,7 @@ function renderAjustes() {
   setVal('#ntfyServer', ntfy.server);
   setVal('#ntfyTopic', ntfy.topic);
   $('#ntfyOnReminder').checked = !!ntfy.onReminder;
+  setVal('#ntfyDiaper', (state.settings.reminders?.diaperTimes || []).join(', '));
 }
 
 function renderSyncStatus() {
@@ -885,6 +886,9 @@ function avisarWhatsApp(texto) {
 function avisarNtfy(texto) {
   const ntfy = state.settings.ntfy;
   if (!ntfy.enabled || !ntfy.onReminder || !ntfy.topic) return;
+  // Com a sincronização ligada, quem manda os pushes é o servidor (/api/cron),
+  // em tempo real e mesmo com o app fechado — então aqui não duplicamos.
+  if (SYNC.isEnabled()) return;
   const nome = state.baby.name?.trim();
   NTFY.publish(ntfy, {
     title: `Rotina${nome ? ` · ${nome}` : ''}`,
@@ -922,60 +926,6 @@ function checarAvisos() {
     avisarWhatsApp(`💊 Hora do ${med.name}. ${corpo}`);
     avisarNtfy(`💊 Hora do ${med.name}. ${corpo}`);
   });
-}
-
-/**
- * Agenda no ntfy os lembretes das próximas `horas` horas (entrega agendada).
- * Chega mesmo com o app fechado. Dedup local para não repetir a cada toque.
- */
-async function programarNtfy(horas = 10) {
-  const ntfy = state.settings.ntfy;
-  if (!ntfy.enabled || !ntfy.topic) throw new Error('Configure o ntfy primeiro.');
-  const CHAVE = 'rotina-bebe:ntfy-agendados';
-  let jaAgendados;
-  try { jaAgendados = new Set(JSON.parse(localStorage.getItem(CHAVE) || '[]')); }
-  catch { jaAgendados = new Set(); }
-
-  const agora = Date.now();
-  const nome = state.baby.name?.trim();
-  const linhas = S.agenda(horas).filter((l) => l.at > agora + MS_MIN); // dá margem de 1 min
-  let novos = 0;
-  for (const l of linhas) {
-    const texto = `${l.emoji} ${l.text}`;
-    const chave = `${l.at}|${texto}`;
-    if (jaAgendados.has(chave)) continue;
-    await NTFY.publish(ntfy, {
-      title: `Rotina${nome ? ` · ${nome}` : ''}`,
-      message: texto,
-      tags: NTFY.tagPara(texto),
-      priority: 'high',
-      at: l.at,
-    });
-    jaAgendados.add(chave);
-    novos += 1;
-  }
-  // Guarda só o que ainda é futuro, para o conjunto não crescer sem fim.
-  const mantidos = [...jaAgendados].filter((k) => Number(k.split('|')[0]) > agora);
-  try { localStorage.setItem(CHAVE, JSON.stringify(mantidos)); } catch { /* ignora */ }
-  return { novos, total: linhas.length };
-}
-
-/**
- * Reagenda os lembretes automaticamente sempre que o app abre/volta ao foco,
- * cobrindo as próximas 12h — assim não precisa apertar o botão toda noite.
- * Throttle de 15 min (o programarNtfy já deduplica, então repetir é barato)
- * e roda em silêncio: nada de toast, só publica o que ainda não estava agendado.
- */
-let ultimoReagendoNtfy = 0;
-function reagendarNtfyAuto() {
-  const ntfy = state.settings.ntfy;
-  if (!ntfy.enabled || !ntfy.topic) return;
-  const agora = Date.now();
-  if (agora - ultimoReagendoNtfy < 15 * MS_MIN) return;
-  ultimoReagendoNtfy = agora;
-  programarNtfy(12)
-    .then((r) => { if (r.novos) console.info(`ntfy: ${r.novos} lembrete(s) reagendado(s) automaticamente`); })
-    .catch((err) => console.warn('ntfy auto falhou:', err.message));
 }
 
 /** Empurra a agenda para o worker 24/7, no máximo a cada 5 min (best-effort). */
@@ -1071,11 +1021,25 @@ function ligarEventosSync() {
 
 /* ================================================================ ntfy (UI) */
 
+/** "10:00, 14h, 8:5" -> ['08:05','10:00','14:00'] (válidos, únicos, ordenados). */
+function parseHorarios(bruto) {
+  const vistos = new Set();
+  (String(bruto).match(/\d{1,2}\s*[:h]\s*\d{0,2}/g) || []).forEach((tok) => {
+    const [h, m = '0'] = tok.split(/[:h]/);
+    const hh = Number(h); const mm = Number(m || 0);
+    if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) {
+      vistos.add(`${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`);
+    }
+  });
+  return [...vistos].sort();
+}
+
 function lerConfigNtfy() {
   const ntfy = state.settings.ntfy;
   ntfy.server = $('#ntfyServer').value.trim() || 'https://ntfy.sh';
   ntfy.topic = $('#ntfyTopic').value.trim();
   ntfy.onReminder = $('#ntfyOnReminder').checked;
+  state.settings.reminders.diaperTimes = parseHorarios($('#ntfyDiaper').value);
   S.save();
 }
 
@@ -1118,20 +1082,7 @@ function ligarEventosNtfy() {
     }
   });
 
-  $('#ntfySchedule').addEventListener('click', async (e) => {
-    lerConfigNtfy();
-    if (!state.settings.ntfy.topic) { toast('Defina ou gere um tópico'); return; }
-    e.target.disabled = true;
-    toast('Programando…');
-    try {
-      const r = await programarNtfy(12);
-      toast(r.novos ? `${r.novos} lembrete(s) programado(s)` : 'Nada novo para programar');
-    } catch (err) {
-      alert(`Falha ao programar: ${err.message}`);
-    } finally {
-      e.target.disabled = false;
-    }
-  });
+  $('#ntfyDiaper').addEventListener('change', lerConfigNtfy);
 }
 
 function lerConfigWhatsApp() {
@@ -1322,11 +1273,7 @@ function ligarEventos() {
   $('#sheetBackdrop').addEventListener('click', (e) => { if (e.target.id === 'sheetBackdrop') closeSheet(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSheet(); });
 
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) return;
-    render();
-    reagendarNtfyAuto();
-  });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
 }
 
 /* ================================================================ boot */
@@ -1337,7 +1284,6 @@ ligarEventos();
 irPara('agora');
 setInterval(tick, 1000);
 SYNC.start();
-reagendarNtfyAuto();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

@@ -48,6 +48,11 @@ function estadoInicial() {
         topic: '',          // tópico secreto; qualquer um que souber recebe os avisos
         onReminder: true,   // manda um push quando o aviso dispara (app aberto)
       },
+      // Avisos automáticos pelo servidor (/api/cron): lidos pelo robô via perfil.
+      reminders: {
+        diaperTimes: ['10:00', '14:00', '18:00', '22:00'], // horários fixos p/ lembrar de anotar trocas
+        tzOffsetMin: -180, // fuso da família (Brasil, sem horário de verão)
+      },
     },
     meds: MEDS_PADRAO.map((m) => ({ active: true, ...m })),
     events: [],
@@ -64,6 +69,7 @@ function migrar(dados) {
   s.settings = { ...base.settings, ...(dados.settings || {}) };
   s.settings.wa = { ...base.settings.wa, ...((dados.settings || {}).wa || {}) };
   s.settings.ntfy = { ...base.settings.ntfy, ...((dados.settings || {}).ntfy || {}) };
+  s.settings.reminders = { ...base.settings.reminders, ...((dados.settings || {}).reminders || {}) };
   s.meds = Array.isArray(dados.meds) ? dados.meds : base.meds;
   s.events = Array.isArray(dados.events) ? dados.events : [];
   return s;

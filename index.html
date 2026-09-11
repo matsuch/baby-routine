@@ -169,8 +169,11 @@
           <button class="btn btn-ghost" id="ntfyTest" type="button">Enviar teste</button>
           <button class="btn btn-ghost" id="ntfyGen" type="button">Gerar tópico</button>
         </div>
-        <button class="btn btn-ghost block" id="ntfySchedule" type="button">Programar lembretes da noite</button>
-        <p class="disclaimer">O tópico é <strong>público</strong> para quem souber o nome — por isso use um nome aleatório e não o compartilhe. Os lembretes das próximas 12h são <strong>reagendados automaticamente</strong> toda vez que você abre o app, e chegam na hora certa <strong>mesmo com o app fechado</strong> — o botão acima é só pra forçar na hora. Se registrar uma mamada fora do horário previsto, um aviso já agendado ainda pode chegar no horário antigo.</p>
+        <label class="field">
+          <span>Lembrar de anotar as trocas (horários)</span>
+          <input type="text" id="ntfyDiaper" placeholder="10:00, 14:00, 18:00, 22:00" autocomplete="off" inputmode="numeric">
+        </label>
+        <p class="disclaimer">O tópico é <strong>público</strong> para quem souber o nome — por isso use um nome aleatório e não o compartilhe. Com a <strong>sincronização ligada</strong>, os avisos (mamada, remédios e trocas) são disparados <strong>automaticamente pelo servidor</strong> em tempo real — chegam <strong>mesmo com o app fechado</strong> e se ajustam sozinhos: se você antecipar uma mamada, o próximo aviso muda junto. Os horários de troca acima são os únicos fixos. Deixe em branco para não lembrar das trocas.</p>
       </div>
     </div>
 
