@@ -393,7 +393,7 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 /* ---------- abas ---------- */
 .tabbar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
-  display: grid; grid-template-columns: repeat(5, 1fr);
+  display: grid; grid-template-columns: repeat(4, 1fr);
   background: color-mix(in oklab, var(--bg) 82%, transparent);
   backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
   border-top: 1px solid var(--line-soft);
