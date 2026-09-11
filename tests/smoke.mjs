@@ -56,8 +56,9 @@ try {
   await page.fill('#setName', 'Teresa');
   await page.selectOption('#setInterval', '180');
 
-  // mamada cronometrada com troca de lado
-  await page.click('.tab[data-view="mamada"]');
+  // mamada cronometrada com troca de lado (a tela abre pela ação rápida "Mamada")
+  await page.click('.tab[data-view="agora"]');
+  await page.click('.quick[data-quick="mamada"]');
   await page.click('.side-btn[data-side="E"]');
   await page.waitForTimeout(1100);
   await page.click('.side-btn[data-side="D"]');
