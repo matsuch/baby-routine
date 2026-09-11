@@ -14,9 +14,9 @@ export const MS_HOUR = 3600000;
  * perfil não fique em ping-pong na sincronização.
  */
 const MEDS_PADRAO = [
-  { id: 'med-cefalexina', name: 'Cefalexina', intervalHours: 6, dose: '', who: 'mãe' },
-  { id: 'med-paracetamol', name: 'Paracetamol', intervalHours: 8, dose: '', who: 'mãe' },
-  { id: 'med-profenid', name: 'Profenid', intervalHours: 12, dose: '', who: 'mãe' },
+  { id: 'med-cefalexina', name: 'Cefalexina', category: 'remedio', intervalHours: 6, dose: '', who: 'mãe' },
+  { id: 'med-paracetamol', name: 'Paracetamol', category: 'remedio', intervalHours: 8, dose: '', who: 'mãe' },
+  { id: 'med-profenid', name: 'Profenid', category: 'remedio', intervalHours: 12, dose: '', who: 'mãe' },
 ];
 
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -71,6 +71,8 @@ function migrar(dados) {
   s.settings.ntfy = { ...base.settings.ntfy, ...((dados.settings || {}).ntfy || {}) };
   s.settings.reminders = { ...base.settings.reminders, ...((dados.settings || {}).reminders || {}) };
   s.meds = Array.isArray(dados.meds) ? dados.meds : base.meds;
+  // Alertas antigos (sem categoria) eram todos remédio.
+  s.meds.forEach((m) => { if (!m.category) m.category = 'remedio'; });
   s.events = Array.isArray(dados.events) ? dados.events : [];
   return s;
 }
@@ -304,7 +306,9 @@ export function nextDoseAt(med) {
 }
 
 export function takeMed(med, at = Date.now()) {
-  return addEvent({ type: 'med', at, medId: med.id, name: med.name, dose: med.dose || '' });
+  return addEvent({
+    type: 'med', at, medId: med.id, name: med.name, dose: med.dose || '', category: med.category || 'remedio',
+  });
 }
 
 export function saveMed(dados) {

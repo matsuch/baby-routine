@@ -15,7 +15,7 @@ const $$ = (sel) => [...document.querySelectorAll(sel)];
 const TITULOS = {
   agora: 'Agora',
   mamada: 'Mamada',
-  remedios: 'Remédios',
+  remedios: 'Alertas',
   diario: 'Diário',
   ajustes: 'Ajustes',
 };
@@ -367,7 +367,7 @@ function renderAgora() {
     }));
   }
 
-  // — próximas doses de remédio —
+  // — próximos alertas (remédios, consultas…) —
   state.meds
     .filter((m) => m.active !== false && S.nextDoseAt(m))
     .map((m) => ({ med: m, at: S.nextDoseAt(m) }))
@@ -375,7 +375,7 @@ function renderAgora() {
     .slice(0, 3)
     .forEach(({ med, at }) => {
       cards.append(cartaoProximo({
-        emoji: '💊', titulo: med.name,
+        emoji: catInfo(med.category).emoji, titulo: med.name,
         sub: `${fmtTime(at)} · a cada ${med.intervalHours}h${med.dose ? ` · ${med.dose}` : ''}`,
         at, onClick: () => irPara('remedios'),
       }));
@@ -440,10 +440,23 @@ function subtituloEvento(ev) {
 
 const EVENTO_TONE = { feed: 'lamp', sleep: 'sleep', burp: 'leaf', med: 'med', diaper: 'aqua', note: '' };
 
+/** Categorias dos alertas (picklist do cadastro). O id é o que fica salvo. */
+const CATEGORIAS = [
+  { id: 'remedio', label: 'Remédio', emoji: '💊', tint: 'med' },
+  { id: 'vacina', label: 'Vacina', emoji: '💉', tint: 'aqua' },
+  { id: 'consulta', label: 'Consulta', emoji: '🩺', tint: 'sleep' },
+  { id: 'alimentacao', label: 'Alimentação', emoji: '🍼', tint: 'lamp' },
+  { id: 'higiene', label: 'Higiene', emoji: '🧴', tint: 'leaf' },
+  { id: 'outro', label: 'Outro', emoji: '🔔', tint: 'plain' },
+];
+const catInfo = (id) => CATEGORIAS.find((c) => c.id === id) || CATEGORIAS[0];
+
 function linhaEvento(ev, { apagavel = true } = {}) {
   const item = el('div', 'item');
-  const emoji = ev.type === 'diaper' && ev.kind !== 'xixi' ? '💩' : EVENTO_EMOJI[ev.type] || '•';
-  item.append(el('div', `emoji tint-${EVENTO_TONE[ev.type] || 'plain'}`, emoji));
+  let emoji = ev.type === 'diaper' && ev.kind !== 'xixi' ? '💩' : EVENTO_EMOJI[ev.type] || '•';
+  let tint = EVENTO_TONE[ev.type] || 'plain';
+  if (ev.type === 'med') { const c = catInfo(ev.category); emoji = c.emoji; tint = c.tint; }
+  item.append(el('div', `emoji tint-${tint}`, emoji));
   const corpo = el('div', 'item-body');
   corpo.append(el('div', 'item-title', tituloEvento(ev)), el('div', 'item-sub', subtituloEvento(ev)));
   item.append(corpo, el('div', 'item-time', fmtTime(ev.at)));
@@ -606,18 +619,19 @@ function renderRemedios() {
   const lista = $('#medList');
   lista.innerHTML = '';
   if (!state.meds.length) {
-    lista.append(el('p', 'empty', 'Nenhum remédio cadastrado.'));
+    lista.append(el('p', 'empty', 'Nenhum alerta cadastrado.'));
     return;
   }
 
   state.meds.forEach((med) => {
+    const cat = catInfo(med.category);
     const card = el('div', 'card med');
     const head = el('div', 'med-head');
-    head.append(el('div', 'chip tint-med', '💊'));
+    head.append(el('div', `chip tint-${cat.tint}`, cat.emoji));
     const texto = el('div', 'med-head-text');
     texto.append(
       el('div', 'med-name', med.name),
-      el('div', 'med-meta', `a cada ${med.intervalHours}h${med.dose ? ` · ${med.dose}` : ''}${med.who ? ` · ${med.who}` : ''}`),
+      el('div', 'med-meta', `${cat.label} · a cada ${med.intervalHours}h${med.dose ? ` · ${med.dose}` : ''}`),
     );
     head.append(texto);
     card.append(head);
@@ -628,14 +642,14 @@ function renderRemedios() {
     if (prox) {
       const info = countdown(prox);
       if (info.state !== 'ok') quando.classList.add(info.state === 'late' ? 'is-late' : 'is-due');
-      quando.textContent = `Próxima ${fmtTime(prox)} (${info.label}) · última ${fmtTime(dose.at)}`;
+      quando.textContent = `Próximo ${fmtTime(prox)} (${info.label}) · último ${fmtTime(dose.at)}`;
     } else {
-      quando.textContent = 'Sem dose registrada ainda';
+      quando.textContent = 'Sem registro ainda';
     }
     card.append(quando);
 
     const acoes = el('div', 'med-actions');
-    const tomar = el('button', 'btn btn-primary', prox ? 'Tomei agora' : 'Registrar 1ª dose');
+    const tomar = el('button', 'btn btn-primary', prox ? 'Registrei agora' : 'Registrar 1º');
     tomar.addEventListener('click', () => {
       S.takeMed(med);
       vibrar();
@@ -645,7 +659,7 @@ function renderRemedios() {
     ajustar.title = 'Registrar em outro horário';
     ajustar.addEventListener('click', () => sheetDoseHorario(med));
     const editar = el('button', 'btn btn-ghost btn-icon', '✎');
-    editar.title = 'Editar remédio';
+    editar.title = 'Editar alerta';
     editar.addEventListener('click', () => sheetMed(med));
     acoes.append(tomar, ajustar, editar);
     card.append(acoes);
@@ -671,29 +685,30 @@ function sheetDoseHorario(med) {
 }
 
 function sheetMed(med = null) {
+  const categoriaAtual = med ? (med.category || 'remedio') : 'remedio';
+  const opcoes = CATEGORIAS
+    .map((c) => `<option value="${c.id}"${c.id === categoriaAtual ? ' selected' : ''}>${c.emoji} ${c.label}</option>`)
+    .join('');
   const form = el('form');
   form.innerHTML = `
+    <label class="field"><span>Categoria</span>
+      <select name="category">${opcoes}</select></label>
     <label class="field"><span>Nome</span>
       <input type="text" name="name" value="${med ? med.name : ''}" placeholder="Ex.: Cefalexina" required></label>
     <label class="field"><span>Intervalo (horas)</span>
-      <input type="number" name="intervalHours" value="${med ? med.intervalHours : 8}" min="1" max="72" inputmode="numeric" required></label>
-    <label class="field"><span>Dose (opcional)</span>
-      <input type="text" name="dose" value="${med ? med.dose || '' : ''}" placeholder="Ex.: 1 comprimido"></label>
-    <label class="field"><span>Para quem</span>
-      <select name="who">
-        <option value="mãe"${med && med.who === 'mãe' ? ' selected' : ''}>Mãe</option>
-        <option value="bebê"${med && med.who === 'bebê' ? ' selected' : ''}>Bebê</option>
-      </select></label>
+      <input type="number" name="intervalHours" value="${med ? med.intervalHours : 8}" min="1" max="8760" inputmode="numeric" required></label>
+    <label class="field"><span>Descrição (opcional)</span>
+      <input type="text" name="dose" value="${med ? med.dose || '' : ''}" placeholder="Ex.: 1 comprimido, jejum, pediatra…"></label>
     <button class="btn btn-primary block" type="submit">Salvar</button>`;
 
   if (med) {
-    const apagar = el('button', 'btn btn-danger block', 'Apagar remédio');
+    const apagar = el('button', 'btn btn-danger block', 'Apagar alerta');
     apagar.type = 'button';
     apagar.addEventListener('click', () => {
-      if (confirm(`Apagar ${med.name} e o histórico de doses?`)) {
+      if (confirm(`Apagar ${med.name} e o histórico?`)) {
         S.removeMed(med.id);
         closeSheet();
-        toast('Remédio apagado');
+        toast('Alerta apagado');
       }
     });
     form.append(apagar);
@@ -704,16 +719,16 @@ function sheetMed(med = null) {
     const d = Object.fromEntries(new FormData(form));
     S.saveMed({
       id: med ? med.id : undefined,
+      category: d.category,
       name: d.name.trim(),
       intervalHours: Math.max(1, Number(d.intervalHours) || 8),
       dose: d.dose.trim(),
-      who: d.who,
       active: true,
     });
     closeSheet();
     toast('Salvo');
   });
-  openSheet(med ? 'Editar remédio' : 'Novo remédio', form);
+  openSheet(med ? 'Editar alerta' : 'Novo alerta', form);
 }
 
 /* ================================================================ DIÁRIO */
@@ -792,7 +807,7 @@ function textoResumo() {
     `Mamadas: ${resumo.mamadas} (${fmtMin(resumo.minutosMamando)} no total)`,
     `Fraldas: ${resumo.xixis} xixi · ${resumo.cocos} cocô`,
     `Sono registrado: ${fmtMin(resumo.minutosDormindo)}`,
-    `Remédios: ${resumo.remedios} doses`,
+    `Alertas: ${resumo.remedios} registros`,
     '',
   ];
   resumo.eventos.forEach((ev) => {
@@ -977,10 +992,11 @@ function checarAvisos() {
     const chave = `med:${med.id}:${prox}`;
     if (avisados.has(chave)) return;
     marcarAviso(chave);
-    const corpo = med.dose ? `Dose: ${med.dose}` : `A cada ${med.intervalHours}h.`;
-    avisar(`Hora do ${med.name} 💊`, corpo, chave);
-    avisarWhatsApp(`💊 Hora do ${med.name}. ${corpo}`);
-    avisarNtfy(`💊 Hora do ${med.name}. ${corpo}`);
+    const emoji = catInfo(med.category).emoji;
+    const corpo = med.dose || `A cada ${med.intervalHours}h.`;
+    avisar(`${med.name} ${emoji}`, corpo, chave);
+    avisarWhatsApp(`${emoji} ${med.name}. ${corpo}`);
+    avisarNtfy(`${emoji} ${med.name}. ${corpo}`);
   });
 }
 

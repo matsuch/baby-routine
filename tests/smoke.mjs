@@ -102,13 +102,16 @@ try {
   const totalMeds = await doses.count();
   checar(totalMeds === 3, `esperava 3 remédios sugeridos, achei ${totalMeds}`);
   for (let i = 0; i < totalMeds; i += 1) await doses.nth(i).click();
-  checar((await page.locator('.med-when').allTextContents()).every((t) => t.includes('Próxima')),
-    'remédio sem próxima dose depois de registrar');
+  checar((await page.locator('.med-when').allTextContents()).every((t) => t.includes('Próximo')),
+    'alerta sem próximo registro depois de registrar');
   await page.click('#btnAddMed');
-  await page.fill('#sheetBody input[name="name"]', 'Vitamina D');
-  await page.fill('#sheetBody input[name="intervalHours"]', '24');
+  await page.selectOption('#sheetBody select[name="category"]', 'consulta');
+  await page.fill('#sheetBody input[name="name"]', 'Consulta pediatra');
+  await page.fill('#sheetBody input[name="intervalHours"]', '720');
   await page.click('#sheetBody button[type="submit"]');
-  checar(await page.locator('.med').count() === 4, 'remédio novo não foi salvo');
+  checar(await page.locator('.med').count() === 4, 'alerta novo não foi salvo');
+  checar((await page.locator('.med .chip').allTextContents()).some((t) => t.includes('🩺')),
+    'categoria (emoji) não apareceu no card do alerta');
   await shot('remedios.png');
 
   // agenda projetada
