@@ -87,56 +87,58 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 
 /* ---------- herói: timeline circular de 24h ---------- */
 .hero { display: grid; justify-items: center; gap: 18px; margin: 10px 0 18px; }
-.hero-ring { width: min(80vw, 320px); height: auto; display: block; overflow: visible; }
+.hero-ring { width: min(86vw, 340px); height: auto; display: block; overflow: visible; aspect-ratio: 1 / 1; }
 
-/* órbita: trilha quase imperceptível + micro-partículas de hora */
-.hero-track { fill: none; stroke: rgba(255, 255, 255, .035); stroke-width: 1.2; }
-.hero-dot { fill: rgba(255, 255, 255, .07); }
-.hero-dot6 { fill: rgba(255, 255, 255, .16); }
+/* a trilha É a timeline: faixa espessa e contínua, perceptível mas discreta */
+.hero-track { fill: none; stroke: var(--surface-2); stroke-width: 11; }
+.hero-dot { fill: rgba(255, 255, 255, .06); }
+.hero-dot6 { fill: rgba(255, 255, 255, .14); }
 
-/* sono: halo largo + arco fino com gradiente sutil e glow discreto */
-.hero-sleep-glow { fill: none; stroke: var(--sleep); stroke-width: 10; stroke-linecap: round; opacity: .075; }
+/* sono: preenche a MESMA faixa (mesmo raio e mesma espessura da trilha) */
 .hero-sleep {
-  fill: none; stroke: url(#heroSleepGrad); stroke-width: 4.5; stroke-linecap: round;
-  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--sleep) 32%, transparent));
+  fill: none; stroke: url(#heroSleepGrad); stroke-width: 11; stroke-linecap: round;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--sleep) 28%, transparent));
 }
 
-/* mamada: pequeno satélite sobre a órbita */
-.hero-orb { fill: color-mix(in srgb, var(--accent) 10%, transparent); }
-.hero-orb-ring { fill: none; stroke: color-mix(in srgb, var(--accent) 24%, transparent); stroke-width: .7; }
-.hero-ic { opacity: .78; }
-.hero-ic rect { fill: var(--accent); }
-.hero-ic-line { stroke: color-mix(in srgb, var(--bg) 55%, transparent); stroke-width: 1; stroke-linecap: round; }
+/* marcadores de evento: halo + disco + anel + ícone, centrados na órbita */
+.hero-mark { --mkc: var(--accent); }
+.hero-mark--sleep { --mkc: var(--sleep); }
+.hero-mark--wake { --mkc: color-mix(in srgb, var(--accent) 55%, var(--text)); }
+.hero-mark--burp { --mkc: var(--diaper); }
+.mk-halo { fill: color-mix(in srgb, var(--mkc) 13%, transparent); }
+.mk-disc { fill: color-mix(in srgb, var(--bg) 80%, var(--mkc)); }
+.mk-ring { fill: none; stroke: color-mix(in srgb, var(--mkc) 40%, transparent); stroke-width: 1; }
+.hero-ic rect, .hero-ic circle, .hero-ic path { fill: var(--mkc); }
+.hero-ic-ray { stroke: var(--mkc); stroke-width: 1.4; stroke-linecap: round; }
+.hero-ic-line { stroke: color-mix(in srgb, var(--bg) 62%, transparent); stroke-width: 1.1; stroke-linecap: round; }
+/* próximo evento: mesma linguagem, porém "fantasma" */
+.hero-mark.is-ghost { opacity: .62; }
+.hero-mark.is-ghost .mk-disc { fill: color-mix(in srgb, var(--bg) 70%, transparent); }
+.hero-mark.is-ghost .mk-ring { stroke-dasharray: 3 2.6; }
 
-/* horários: informação secundária, presa à órbita por um fio pontilhado */
-.hero-lead { stroke: rgba(255, 255, 255, .16); stroke-width: .8; stroke-dasharray: 1 1.6; stroke-linecap: round; }
-.hero-lead.is-foco { stroke: rgba(255, 255, 255, .34); }
-.hero-tlabel { fill: var(--muted); font-size: 7px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: .02em; opacity: .72; }
+/* horários: sempre atrelados a um evento, como informação secundária */
+.hero-lead { stroke: rgba(255, 255, 255, .18); stroke-width: .8; stroke-dasharray: 1 1.6; stroke-linecap: round; }
+.hero-tlabel { fill: var(--muted); font-size: 8px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: .02em; opacity: .75; }
 .hero-tlabel.is-foco { fill: var(--text); font-weight: 700; opacity: .95; }
 
-/* marcador do próximo evento (foco) */
-.hero-foco-halo { opacity: .14; }
-.hero-foco-dot { opacity: .9; }
-
-/* marcador de AGORA — ponto vivo na órbita */
+/* AGORA: cabeçote que cruza a faixa */
 .hero-now-g { transition: transform 1s linear; }
-.hero-now-tick { stroke: var(--text); stroke-width: 1.2; stroke-linecap: round; opacity: .3; }
+.hero-now-tick { stroke: var(--text); stroke-width: 1.8; stroke-linecap: round; opacity: .55; }
 .hero-now-pulse {
   fill: var(--text); opacity: .1; transform-box: fill-box; transform-origin: center;
   animation: heroPulse 3.4s ease-in-out infinite;
 }
-.hero-now-ring { fill: none; stroke: var(--text); stroke-width: .8; opacity: .28; }
-.hero-now-dot { fill: var(--text); opacity: .92; }
+.hero-now-dot { fill: var(--text); opacity: .95; }
 
 /* centro: secundário · principal · secundário */
 .hero-label { fill: var(--muted); font-size: 10.5px; font-weight: 600; letter-spacing: .04em; opacity: .85; }
-.hero-big { fill: var(--text); font-size: 30px; font-weight: 700; letter-spacing: -.025em; }
+.hero-big { fill: var(--text); font-size: 26px; font-weight: 700; letter-spacing: -.03em; }
 .hero-sub { fill: var(--muted); font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums; opacity: .85; }
 
 /* animações de entrada — só quando os dados mudam (não a cada segundo) */
 .hero-ring.is-enter { animation: heroFade .55s ease both; }
-.hero-ring.is-enter .hero-sleep-g { animation: heroFade .6s ease both; animation-delay: calc(var(--i, 0) * .06s + .05s); }
-.hero-ring.is-enter .hero-mark { transform-box: fill-box; transform-origin: center; animation: heroPop .5s cubic-bezier(.2, .8, .3, 1) both; animation-delay: calc(var(--i, 0) * .05s + .12s); }
+.hero-ring.is-enter .hero-sleep { animation: heroFade .6s ease both; animation-delay: calc(var(--i, 0) * .06s + .05s); }
+.hero-ring.is-enter .hero-mark { transform-box: fill-box; transform-origin: center; animation: heroPop .5s cubic-bezier(.2, .8, .3, 1) both; animation-delay: calc(var(--i, 0) * .045s + .12s); }
 @keyframes heroFade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes heroPop { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: scale(1); } }
 @keyframes heroPulse {
@@ -144,7 +146,7 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
   50% { opacity: .18; transform: scale(1.1); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .hero-ring.is-enter, .hero-ring.is-enter .hero-sleep-g, .hero-ring.is-enter .hero-mark,
+  .hero-ring.is-enter, .hero-ring.is-enter .hero-sleep, .hero-ring.is-enter .hero-mark,
   .hero-now-pulse { animation: none; }
   .hero-now-g { transition: none; }
 }
