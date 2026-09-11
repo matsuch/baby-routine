@@ -306,44 +306,155 @@ function focusChip(emoji, tone, label, valor) {
   return c;
 }
 
-/** Herói da Home: anel do dia (sono/mamadas) com a contagem do próximo no centro. */
-function renderHero(container) {
+/* ---------- Herói: timeline circular de 24h (SVG) ----------
+ * Geometria fixa; a estrutura é montada uma vez e o tick só reposiciona o
+ * marcador de "agora" e reescreve o texto central — assim as animações de
+ * entrada não se repetem a cada segundo. Toda a lógica de dados/estados
+ * (heroFoco, sono, mamadas, marcador de agora) é preservada. */
+const HERO_NS = 'http://www.w3.org/2000/svg';
+const HERO = { vb: 280, cx: 140, cy: 140, R: 106, rLabel: 126 };
+
+function svgEl(tag, attrs = {}) {
+  const e = document.createElementNS(HERO_NS, tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  return e;
+}
+function heroPonto(raio, deg) {
+  const a = (deg * Math.PI) / 180;
+  return [HERO.cx + raio * Math.cos(a), HERO.cy + raio * Math.sin(a)];
+}
+function heroAng(t, inicio) { return ((t - inicio) / (24 * MS_HOUR)) * 360 - 90; }
+
+/** Mamadeira minimalista, centrada em (0,0), ~14 de altura. */
+function iconeMamadeira() {
+  const g = svgEl('g', { class: 'hero-ic' });
+  g.append(
+    svgEl('rect', { x: -1.4, y: -7.2, width: 2.8, height: 2.2, rx: 1 }),   // bico
+    svgEl('rect', { x: -3, y: -5.2, width: 6, height: 1.6, rx: 0.8 }),     // colar
+    svgEl('rect', { x: -3.3, y: -3.4, width: 6.6, height: 8.8, rx: 2.2 }), // corpo
+    svgEl('line', { x1: -1.1, y1: -0.6, x2: 1.3, y2: -0.6, class: 'hero-ic-line' }),
+  );
+  return g;
+}
+
+/** Monta o SVG do herói do zero (só quando os dados mudam). */
+function montarHero(container, { foco, inicio, fim, feeds, segs }) {
   container.innerHTML = '';
-  const foco = heroFoco();
   const cor = foco.tone === 'lamp' ? 'var(--accent)' : 'var(--sleep)';
-  const NS = 'http://www.w3.org/2000/svg';
-  const [inicio, fim] = S.dayBounds();
-  const eventos = S.eventsBetween(inicio, fim);
-  const cx = 120; const cy = 120; const r = 96;
+  const { cx, cy, R, rLabel, vb } = HERO;
+  const svg = svgEl('svg', { viewBox: `0 0 ${vb} ${vb}`, class: 'hero-ring is-enter' });
 
-  const svg = document.createElementNS(NS, 'svg');
-  svg.setAttribute('viewBox', '0 0 240 240');
-  svg.setAttribute('class', 'hero-ring');
-  const ang = (t) => ((t - inicio) / (24 * MS_HOUR)) * 360 - 90;
-  const ponto = (raio, deg) => { const a = (deg * Math.PI) / 180; return [cx + raio * Math.cos(a), cy + raio * Math.sin(a)]; };
-  const add = (tag, attrs) => { const e = document.createElementNS(NS, tag); Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, v)); svg.append(e); return e; };
+  const defs = svgEl('defs');
+  defs.innerHTML = '<filter id="heroGlow" x="-60%" y="-60%" width="220%" height="220%">'
+    + '<feGaussianBlur stdDeviation="2.4" result="b"/>'
+    + '<feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>';
+  svg.append(defs);
 
-  add('circle', { cx, cy, r, class: 'hero-track' });
-  S.sleepSegmentsInDay().forEach((seg) => {
-    const a1 = ang(seg.at); const a2 = ang(seg.endAt);
-    if (a2 - a1 < 0.5) return;
-    const [x1, y1] = ponto(r, a1); const [x2, y2] = ponto(r, a2);
-    add('path', { d: `M ${x1} ${y1} A ${r} ${r} 0 ${a2 - a1 > 180 ? 1 : 0} 1 ${x2} ${y2}`, class: 'hero-sleep' });
+  svg.append(svgEl('circle', { cx, cy, r: R, class: 'hero-track' }));
+
+  // marcas discretas de orientação (0/6/12/18h)
+  [0, 6, 12, 18].forEach((h) => {
+    const deg = (h / 24) * 360 - 90;
+    const [x1, y1] = heroPonto(R - 3.5, deg); const [x2, y2] = heroPonto(R + 3.5, deg);
+    svg.append(svgEl('line', { x1, y1, x2, y2, class: 'hero-tick' }));
   });
-  eventos.filter((e) => e.type === 'feed').forEach((e) => { const [x, y] = ponto(r, ang(e.at)); add('circle', { cx: x, cy: y, r: 3.4, class: 'hero-feed' }); });
+
+  // arcos de sono (finos, cantos arredondados, lilás suave)
+  segs.forEach((seg, i) => {
+    const a1 = heroAng(seg.at, inicio); const a2 = heroAng(seg.endAt, inicio);
+    if (a2 - a1 < 0.6) return;
+    const [x1, y1] = heroPonto(R, a1); const [x2, y2] = heroPonto(R, a2);
+    svg.append(svgEl('path', {
+      d: `M ${x1} ${y1} A ${R} ${R} 0 ${a2 - a1 > 180 ? 1 : 0} 1 ${x2} ${y2}`,
+      class: 'hero-sleep', style: `--i:${i}`,
+    }));
+  });
+
+  // mamadas: orb translúcido + ícone pequeno
+  feeds.forEach((e, i) => {
+    const [x, y] = heroPonto(R, heroAng(e.at, inicio));
+    const outer = svgEl('g', { transform: `translate(${x} ${y})` });
+    const inner = svgEl('g', { class: 'hero-mark', style: `--i:${i}` });
+    inner.append(svgEl('circle', { r: 8.4, class: 'hero-orb' }));
+    const ic = iconeMamadeira(); ic.setAttribute('transform', 'scale(0.6)');
+    inner.append(ic);
+    outer.append(inner); svg.append(outer);
+  });
+
+  // horários relevantes: início de cada soneca + o próximo evento (deduplicados)
+  const labels = segs.map((seg) => ({ deg: heroAng(seg.at, inicio), t: seg.at }));
+  if (foco.at && foco.at >= inicio && foco.at < fim) labels.push({ deg: heroAng(foco.at, inicio), t: foco.at, foco: true });
+  labels.sort((a, b) => a.deg - b.deg);
+  let ultimo = -999;
+  labels.forEach((L) => {
+    if (!L.foco && L.deg - ultimo < 16) return; // não amontoa
+    ultimo = L.deg;
+    const [lx, ly] = heroPonto(rLabel, L.deg);
+    const txt = svgEl('text', {
+      x: lx, y: ly, class: `hero-tlabel${L.foco ? ' is-foco' : ''}`,
+      'text-anchor': 'middle', 'dominant-baseline': 'middle',
+    });
+    txt.textContent = fmtTime(L.t);
+    svg.append(txt);
+  });
+
+  // marcador do próximo evento (foco)
   if (foco.at && foco.at >= inicio && foco.at < fim) {
-    const [mx, my] = ponto(r, ang(foco.at));
-    add('circle', { cx: mx, cy: my, r: 10, fill: cor, opacity: '.22' });
-    add('circle', { cx: mx, cy: my, r: 5, fill: cor });
+    const [mx, my] = heroPonto(R, heroAng(foco.at, inicio));
+    svg.append(svgEl('circle', { cx: mx, cy: my, r: 9, class: 'hero-foco-halo', fill: cor }));
+    svg.append(svgEl('circle', { cx: mx, cy: my, r: 3.6, class: 'hero-foco-dot', fill: cor }));
   }
-  const [nx1, ny1] = ponto(r - 10, ang(Date.now())); const [nx2, ny2] = ponto(r + 8, ang(Date.now()));
-  add('line', { x1: nx1, y1: ny1, x2: nx2, y2: ny2, class: 'hero-now' });
 
-  const tl = add('text', { x: cx, y: cy - 22, class: 'hero-label' }); tl.textContent = foco.label;
-  const tb = add('text', { x: cx, y: cy + 10, class: 'hero-big', fill: cor }); tb.textContent = foco.big;
-  if (foco.at) { const ts = add('text', { x: cx, y: cy + 34, class: 'hero-sub' }); ts.textContent = fmtTime(foco.at); }
+  // marcador de AGORA: desenhado no topo e rotacionado (atualizado no tick)
+  const nowG = svgEl('g', { class: 'hero-now-g' });
+  const [t1x, t1y] = heroPonto(R - 11, -90); const [t2x, t2y] = heroPonto(R - 3, -90);
+  nowG.append(svgEl('line', { x1: t1x, y1: t1y, x2: t2x, y2: t2y, class: 'hero-now-tick' }));
+  nowG.append(svgEl('circle', { cx, cy: cy - R, r: 6.5, class: 'hero-now-halo' }));
+  nowG.append(svgEl('circle', { cx, cy: cy - R, r: 3, class: 'hero-now-dot' }));
+  svg.append(nowG);
+
+  // centro (hierarquia: rótulo pequeno · número dominante · horário menor)
+  const tl = svgEl('text', { x: cx, y: cy - 19, class: 'hero-label', 'text-anchor': 'middle' });
+  const tb = svgEl('text', { x: cx, y: cy + 9, class: 'hero-big', 'text-anchor': 'middle', fill: cor });
+  const ts = svgEl('text', { x: cx, y: cy + 31, class: 'hero-sub', 'text-anchor': 'middle' });
+  svg.append(tl, tb, ts);
+
   container.append(svg);
+  container.__nowG = nowG; container.__tl = tl; container.__tb = tb; container.__ts = ts;
+}
 
+/** Atualiza só o que muda a cada segundo (posição do "agora" + centro). */
+function atualizarHero(container, { foco, inicio }) {
+  if (container.__nowG) {
+    container.__nowG.setAttribute('transform', `rotate(${heroAng(Date.now(), inicio) + 90} ${HERO.cx} ${HERO.cy})`);
+  }
+  if (container.__tl) container.__tl.textContent = foco.label;
+  if (container.__tb) container.__tb.textContent = foco.big;
+  if (container.__ts) container.__ts.textContent = foco.at ? fmtTime(foco.at) : '';
+}
+
+/** Herói da Home: timeline circular do dia + chips de foco. */
+function renderHero(container) {
+  const foco = heroFoco();
+  const [inicio, fim] = S.dayBounds();
+  const feeds = S.eventsBetween(inicio, fim).filter((e) => e.type === 'feed');
+  const segs = S.sleepSegmentsInDay();
+
+  // Assinatura do que é "estático" (tudo menos o segundo atual).
+  const sig = JSON.stringify({
+    l: foco.label, tone: foco.tone, at: foco.at || 0, i: inicio,
+    f: feeds.map((e) => e.at), s: segs.map((x) => [x.at, x.endAt]),
+    sl: !!state.activeSleep, fe: !!state.activeFeed,
+  });
+  if (container.__sig !== sig) {
+    container.__sig = sig;
+    montarHero(container, { foco, inicio, fim, feeds, segs });
+  }
+  atualizarHero(container, { foco, inicio });
+
+  // Chips de foco (baratos) — reconstruídos sempre, sem animação.
+  const antigo = container.querySelector('.focus-chips');
+  if (antigo) antigo.remove();
   const chips = el('div', 'focus-chips');
   const ultima = S.lastEvent('feed');
   chips.append(focusChip('🍼', 'lamp', 'Última mamada', ultima ? fmtTime(ultima.at) : '—'));
