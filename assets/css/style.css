@@ -89,15 +89,16 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 .hero { display: grid; justify-items: center; gap: 18px; margin: 10px 0 18px; }
 .hero-ring { width: min(86vw, 340px); height: auto; display: block; overflow: visible; aspect-ratio: 1 / 1; }
 
-/* a trilha É a timeline: faixa espessa e contínua, perceptível mas discreta */
-.hero-track { fill: none; stroke: var(--surface-2); stroke-width: 11; }
+/* ACORDADA: a trilha das 24h — escura, discreta, sem cor */
+.hero-track { fill: none; stroke: var(--surface-2); stroke-width: 12; }
 .hero-dot { fill: rgba(255, 255, 255, .06); }
 .hero-dot6 { fill: rgba(255, 255, 255, .14); }
 
-/* sono: preenche a MESMA faixa (mesmo raio e mesma espessura da trilha) */
+/* DORMINDO: preenche a mesma trilha (mesmo raio/centro), porém mais grossa,
+   em lavanda sólido e com brilho sutil — a leitura é imediata */
 .hero-sleep {
-  fill: none; stroke: url(#heroSleepGrad); stroke-width: 11; stroke-linecap: round;
-  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--sleep) 28%, transparent));
+  fill: none; stroke: url(#heroSleepGrad); stroke-width: 15; stroke-linecap: round;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--sleep) 45%, transparent));
 }
 
 /* marcadores de evento: halo + disco + anel + ícone, centrados na órbita */
@@ -137,8 +138,11 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 
 /* animações de entrada — só quando os dados mudam (não a cada segundo) */
 .hero-ring.is-enter { animation: heroFade .55s ease both; }
-.hero-ring.is-enter .hero-sleep { animation: heroFade .6s ease both; animation-delay: calc(var(--i, 0) * .06s + .05s); }
+.hero-ring.is-enter .hero-sleep:not(.is-live) { animation: heroFade .6s ease both; animation-delay: calc(var(--i, 0) * .06s + .05s); }
 .hero-ring.is-enter .hero-mark { transform-box: fill-box; transform-origin: center; animation: heroPop .5s cubic-bezier(.2, .8, .3, 1) both; animation-delay: calc(var(--i, 0) * .045s + .12s); }
+/* soneca em curso: respira de leve para indicar que está acontecendo */
+.hero-sleep.is-live { animation: heroLive 3.4s ease-in-out infinite; }
+@keyframes heroLive { 0%, 100% { opacity: .88; } 50% { opacity: 1; } }
 @keyframes heroFade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes heroPop { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: scale(1); } }
 @keyframes heroPulse {
@@ -146,8 +150,8 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
   50% { opacity: .18; transform: scale(1.1); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .hero-ring.is-enter, .hero-ring.is-enter .hero-sleep, .hero-ring.is-enter .hero-mark,
-  .hero-now-pulse { animation: none; }
+  .hero-ring.is-enter, .hero-ring.is-enter .hero-sleep:not(.is-live), .hero-ring.is-enter .hero-mark,
+  .hero-sleep.is-live, .hero-now-pulse { animation: none; }
   .hero-now-g { transition: none; }
 }
 

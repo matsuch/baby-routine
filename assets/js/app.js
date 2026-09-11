@@ -320,7 +320,8 @@ const HERO_NS = 'http://www.w3.org/2000/svg';
 const HERO = {
   vb: 280, cx: 140, cy: 140,
   R: 88,           // linha central da órbita
-  faixa: 11,       // espessura da trilha e dos períodos
+  faixa: 12,       // espessura da trilha das 24h (períodos acordada)
+  faixaSono: 15,   // períodos de sono: preenchem a trilha e ficam mais grossos
   rMarca: 16,      // marcador principal (mamada) — ~36px em tela
   rMarcaMin: 9.5,  // marcadores secundários (acordou / arroto)
 };
@@ -336,6 +337,12 @@ function heroPonto(raio, deg) {
   return [HERO.cx + raio * Math.cos(a), HERO.cy + raio * Math.sin(a)];
 }
 function heroAng(t, inicio) { return ((t - inicio) / (24 * MS_HOUR)) * 360 - 90; }
+
+/** Path de um arco da órbita entre dois ângulos (graus). */
+function heroArcoD(a1, a2, raio) {
+  const [x1, y1] = heroPonto(raio, a1); const [x2, y2] = heroPonto(raio, a2);
+  return `M ${x1} ${y1} A ${raio} ${raio} 0 ${a2 - a1 > 180 ? 1 : 0} 1 ${x2} ${y2}`;
+}
 
 /**
  * Âncora do rótulo conforme o quadrante: nas laterais o texto "sai" da órbita
@@ -423,14 +430,14 @@ function montarHero(container, { foco, inicio, fim, feeds, segs, burps }) {
   const defs = svgEl('defs');
   defs.innerHTML = '<linearGradient id="heroSleepGrad" x1="0" y1="0" x2="0" y2="1">'
     + '<stop offset="0" style="stop-color:var(--sleep,#bab4ff);stop-opacity:1"/>'
-    + '<stop offset="1" style="stop-color:var(--sleep,#bab4ff);stop-opacity:.72"/></linearGradient>';
+    + '<stop offset="1" style="stop-color:var(--sleep,#bab4ff);stop-opacity:.9"/></linearGradient>';
   svg.append(defs);
 
   // trilha das 24h: faixa espessa e contínua (a timeline em si)
   svg.append(svgEl('circle', { cx, cy, r: R, class: 'hero-track' }));
 
   // micro-partículas de hora, logo fora da faixa
-  const rDot = R + faixa / 2 + 4;
+  const rDot = R + HERO.faixaSono / 2 + 4;
   for (let h = 0; h < 24; h += 1) {
     const [x, y] = heroPonto(rDot, (h / 24) * 360 - 90);
     const marco = h % 6 === 0;
@@ -441,12 +448,13 @@ function montarHero(container, { foco, inicio, fim, feeds, segs, burps }) {
   segs.forEach((seg, i) => {
     const a1 = heroAng(seg.at, inicio); const a2 = heroAng(seg.endAt, inicio);
     if (a2 - a1 < 0.6) return;
-    const [x1, y1] = heroPonto(R, a1); const [x2, y2] = heroPonto(R, a2);
-    svg.append(svgEl('path', {
-      d: `M ${x1} ${y1} A ${R} ${R} 0 ${a2 - a1 > 180 ? 1 : 0} 1 ${x2} ${y2}`,
-      class: 'hero-sleep', style: `--i:${i}`,
-    }));
+    svg.append(svgEl('path', { d: heroArcoD(a1, a2, R), class: 'hero-sleep', style: `--i:${i}` }));
   });
+
+  // sono EM ANDAMENTO: mesmo lavanda, crescendo até "agora" (atualizado no tick),
+  // para que "roxo = dormindo" valha também durante a soneca atual.
+  const liveArc = state.activeSleep ? svgEl('path', { class: 'hero-sleep is-live', d: '' }) : null;
+  if (liveArc) svg.append(liveArc);
 
   // eventos pontuais sobre a órbita (prioridade: próximo > mamada > acordou > arroto)
   const marcas = [];
@@ -478,8 +486,8 @@ function montarHero(container, { foco, inicio, fim, feeds, segs, burps }) {
   cands.sort((a, b) => a.prio - b.prio);
   heroSepara(cands, 15).forEach((L) => {
     if (L.lead) { // sem marcador: um fio curtinho liga o texto à faixa
-      const [g1x, g1y] = heroPonto(R + faixa / 2 + 2, L.deg);
-      const [g2x, g2y] = heroPonto(R + faixa / 2 + 8, L.deg);
+      const [g1x, g1y] = heroPonto(R + HERO.faixaSono / 2 + 2, L.deg);
+      const [g2x, g2y] = heroPonto(R + HERO.faixaSono / 2 + 8, L.deg);
       svg.append(svgEl('line', { x1: g1x, y1: g1y, x2: g2x, y2: g2y, class: 'hero-lead' }));
     }
     const [lx, ly] = heroPonto(rLabel, L.deg);
@@ -493,8 +501,8 @@ function montarHero(container, { foco, inicio, fim, feeds, segs, burps }) {
 
   // AGORA: cabeçote cruzando a faixa (desenhado no topo e rotacionado no tick)
   const nowG = svgEl('g', { class: 'hero-now-g' });
-  const [n1x, n1y] = heroPonto(R - faixa / 2 - 2.5, -90);
-  const [n2x, n2y] = heroPonto(R + faixa / 2 + 2.5, -90);
+  const [n1x, n1y] = heroPonto(R - HERO.faixaSono / 2 - 2.5, -90);
+  const [n2x, n2y] = heroPonto(R + HERO.faixaSono / 2 + 2.5, -90);
   nowG.append(svgEl('circle', { cx, cy: cy - R, r: 9, class: 'hero-now-pulse' }));
   nowG.append(svgEl('line', { x1: n1x, y1: n1y, x2: n2x, y2: n2y, class: 'hero-now-tick' }));
   nowG.append(svgEl('circle', { cx, cy: cy - R, r: 3.2, class: 'hero-now-dot' }));
@@ -508,10 +516,17 @@ function montarHero(container, { foco, inicio, fim, feeds, segs, burps }) {
 
   container.append(svg);
   container.__nowG = nowG; container.__tl = tl; container.__tb = tb; container.__ts = ts;
+  container.__liveArc = liveArc;
 }
 
 /** Atualiza só o que muda a cada segundo (posição do "agora" + centro). */
 function atualizarHero(container, { foco, inicio }) {
+  if (container.__liveArc && state.activeSleep) {
+    const ini = Math.max(state.activeSleep.startAt, inicio);
+    const a1 = heroAng(ini, inicio);
+    const a2 = Math.max(heroAng(Date.now(), inicio), a1 + 0.8); // sempre visível
+    container.__liveArc.setAttribute('d', heroArcoD(a1, a2, HERO.R));
+  }
   if (container.__nowG) {
     container.__nowG.setAttribute('transform', `rotate(${heroAng(Date.now(), inicio) + 90} ${HERO.cx} ${HERO.cy})`);
   }
