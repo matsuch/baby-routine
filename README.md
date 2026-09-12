@@ -11,12 +11,13 @@ tudo no próprio celular** (nenhum dado sai do aparelho, nenhuma conta, nenhum s
 
 | Tela | Para quê |
 |---|---|
-| **Agora** | Próxima mamada e próximas doses com contagem regressiva; **janela de sono / próxima soneca** por idade (estilo Napper); e o **sono do dia vs. recomendado**. Botões grandes para xixi, cocô, arroto e sono. |
+| **Início** | Próxima mamada e próximas doses com contagem regressiva; **janela de sono / próxima soneca** por idade (estilo Napper); e o **sono do dia vs. recomendado**. Botões grandes para xixi, cocô, arroto e sono. Embaixo, a **linha do tempo** do dia com navegação entre dias, **"Agenda do dia"** (projeta os horários das próximas 24h) e **"Copiar resumo"** para mandar no WhatsApp ou mostrar no pediatra. |
 | **Mamada** | Cronômetro com lado esquerdo/direito, troca de lado no meio da mamada e sugestão de qual peito oferecer na próxima. Também dá para registrar uma mamada que já passou. |
-| **Sono** | Cronômetro dedicado; janela de sono por idade prevê a próxima soneca; **relógio do dia (24h)** no Diário mostra sono × mamadas ao longo do dia. As janelas e o total recomendado são **referências gerais por idade — não é conselho médico**. |
+| **Sono** | Cronômetro dedicado; janela de sono por idade prevê a próxima soneca; **relógio do dia (24h)** na Início mostra sono × mamadas ao voltar para um dia anterior. As janelas e o total recomendado são **referências gerais por idade — não é conselho médico**. |
 | **Remédios** | Cada remédio com seu intervalo. "Tomei agora" recalcula a próxima dose sozinho. Já vem com Cefalexina 6h, Paracetamol 8h e Profenid 12h — é só editar ou apagar. |
-| **Diário** | Linha do tempo do dia, resumo (mamadas, fraldas, arrotos, sono) e **"Copiar resumo"** para mandar no WhatsApp ou mostrar no pediatra. **"Agenda do dia"** projeta os horários das próximas 24h — útil para conferir ou recriar os alarmes do celular. |
-| **Ajustes** | Nome e nascimento do bebê, intervalo entre mamadas, avisos, **notificações no WhatsApp** e backup dos dados. |
+| **Diário** | Só gráficos: os números de hoje e três barras dos **últimos 7 dias** — sono, xixis e cocôs — com o valor de cada dia rotulado. |
+| **Evolução** | Em construção. Vai comparar o crescimento com o esperado para a idade: peso e altura, tempo de mamada e de sono, xixis e cocôs. |
+| **Ajustes** | Na **engrenagem do canto superior direito**, disponível em qualquer aba: nome e nascimento do bebê, intervalo entre mamadas, avisos, **notificações no WhatsApp** e backup dos dados. |
 
 ## Notificações push pelo ntfy (recomendado — simples, sem servidor)
 

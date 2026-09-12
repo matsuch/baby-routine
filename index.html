@@ -21,9 +21,10 @@
 
 <header class="topbar">
   <div>
-    <h1 id="topTitle">Agora</h1>
+    <h1 id="topTitle">Início</h1>
     <p class="topbar-sub" id="topSub">—</p>
   </div>
+  <button class="icon-btn" id="btnAjustes" type="button" title="Ajustes" aria-label="Ajustes">⚙️</button>
 </header>
 
 <main id="main">
@@ -98,6 +99,17 @@
       <div id="chartSono"></div>
       <div id="chartXixi"></div>
       <div id="chartCoco"></div>
+    </div>
+  </section>
+
+  <!-- ============ EVOLUÇÃO ============ -->
+  <section class="view" id="view-evolucao" hidden>
+    <div class="card">
+      <h2>📈 Em construção</h2>
+      <p class="muted small">Aqui vai entrar a comparação do crescimento com o esperado para a idade:
+        peso e altura, tempo de mamada e de sono, xixis e cocôs.</p>
+      <p class="muted small">Peso e altura ainda não são registrados em lugar nenhum do app —
+        é o primeiro passo para esta aba sair do papel.</p>
     </div>
   </section>
 
@@ -248,7 +260,7 @@
   <button class="tab is-active" data-view="agora"><span>🏠</span>Início</button>
   <button class="tab" data-view="remedios"><span>🔔</span>Alertas</button>
   <button class="tab" data-view="diario"><span>📔</span>Diário</button>
-  <button class="tab" data-view="ajustes"><span>⚙️</span>Ajustes</button>
+  <button class="tab" data-view="evolucao"><span>📈</span>Evolução</button>
 </nav>
 
 <div class="sheet-backdrop" id="sheetBackdrop" hidden>

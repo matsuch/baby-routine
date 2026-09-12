@@ -16,6 +16,7 @@ const TITULOS = {
   agora: 'Início',
   mamada: 'Mamada',
   remedios: 'Alertas',
+  evolucao: 'Evolução',
   diario: 'Diário',
   ajustes: 'Ajustes',
 };
@@ -78,6 +79,8 @@ function irPara(view) {
   viewAtual = view;
   $$('.view').forEach((v) => { v.hidden = v.id !== `view-${view}`; });
   $$('.tab').forEach((t) => t.classList.toggle('is-active', t.dataset.view === view));
+  // Ajustes saiu da tabbar e virou a engrenagem do topo: ela é quem marca a view.
+  $('#btnAjustes').classList.toggle('is-on', view === 'ajustes');
   $('#topTitle').textContent = TITULOS[view];
   window.scrollTo({ top: 0 });
   render();
@@ -1555,6 +1558,7 @@ function ligarEventosWhatsApp() {
 
 function ligarEventos() {
   $$('.tab').forEach((tab) => tab.addEventListener('click', () => { vibrar(); irPara(tab.dataset.view); }));
+  $('#btnAjustes').addEventListener('click', () => { vibrar(); irPara('ajustes'); });
 
   $$('.quick').forEach((btn) => btn.addEventListener('click', () => {
     vibrar();
