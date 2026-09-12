@@ -118,17 +118,39 @@ try {
     'alerta de data marcada deveria mostrar "uma vez"');
   await shot('remedios.png');
 
-  // agenda projetada
-  await page.click('.tab[data-view="diario"]');
+  // agenda projetada e linha do tempo — vivem na Home
+  await page.click('.tab[data-view="agora"]');
   await page.click('#btnAgenda');
   const linhas = await page.locator('.agenda-line').count();
   checar(linhas > 8, `agenda projetou poucas linhas (${linhas})`);
   await shot('agenda.png');
   await page.click('#sheetClose');
   checar(await page.locator('#timeline .item').count() >= 6, 'linha do tempo do dia veio incompleta');
-  await shot('diario.png');
-  await page.click('.tab[data-view="agora"]');
+  // Em "hoje" a órbita do herói já mostra o dia; o relógio só entra ao voltar no tempo.
+  checar(await page.locator('#dayClock').isHidden(), 'relógio do dia deveria ficar oculto em "hoje"');
+  await page.click('#dayPrev');
+  checar(!(await page.locator('#dayClock').isHidden()), 'relógio do dia não apareceu ao voltar um dia');
+  await page.click('#dayNext');
   await shot('agora.png');
+
+  // diário: só gráficos — sono, xixis e cocôs dos últimos 7 dias
+  await page.click('.tab[data-view="diario"]');
+  // o sono deste teste dura menos de um minuto: arredonda para 0h, então o
+  // gráfico de sono fica legitimamente sem nenhuma barra — só xixi e cocô têm contagem.
+  for (const [id, nome, temDados] of [['#chartSono', 'sono', false], ['#chartXixi', 'xixis', true], ['#chartCoco', 'cocôs', true]]) {
+    checar(await page.locator(`${id} .weekchart`).count() === 1, `gráfico de ${nome} não apareceu no Diário`);
+    checar(await page.locator(`${id} .wc-day`).count() === 7, `gráfico de ${nome} não cobre os 7 dias`);
+    const barras = await page.locator(`${id} .wc-bar`).count();
+    if (temDados) {
+      checar(barras >= 1, `gráfico de ${nome} não desenhou nenhuma barra`);
+      checar(await page.locator(`${id} .wc-val`).count() >= 1, `gráfico de ${nome} não rotulou nenhum valor diário`);
+    } else {
+      checar(barras === 0, `dia zerado não deveria virar barra (${nome} desenhou ${barras})`);
+    }
+  }
+  checar(await page.locator('#dayGrid .stat').count() === 5, 'cards de hoje sumiram do Diário');
+  checar(await page.locator('#view-diario #timeline').count() === 0, 'Diário deveria ser 100% gráficos');
+  await shot('diario.png');
 
   // config de WhatsApp: liga, preenche e testa o "Enviar teste" (fetch stubado)
   await page.click('.tab[data-view="ajustes"]');
