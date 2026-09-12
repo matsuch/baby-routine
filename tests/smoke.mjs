@@ -51,10 +51,20 @@ const shot = (nome) => (SHOTS ? page.screenshot({ path: path.join(SHOTS, nome), 
 try {
   await page.goto(`http://localhost:${PORTA}/index.html`, { waitUntil: 'networkidle' });
 
-  // ajustes
-  await page.click('.tab[data-view="ajustes"]');
+  // ajustes — saiu da tabbar e agora é a engrenagem do topo, presente em toda aba
+  checar(await page.locator('.tab[data-view="ajustes"]').count() === 0, 'Ajustes não deveria mais ser uma aba');
+  checar(await page.locator('.tab[data-view="evolucao"]').count() === 1, 'aba Evolução não apareceu na tabbar');
+  await page.click('#btnAjustes');
+  checar(!(await page.locator('#view-ajustes').isHidden()), 'engrenagem do topo não abriu os Ajustes');
+  checar(await page.locator('#btnAjustes.is-on').count() === 1, 'engrenagem não marcou estado ativo em Ajustes');
   await page.fill('#setName', 'Teresa');
   await page.selectOption('#setInterval', '180');
+
+  // evolução: por ora só a casca, mas precisa abrir e trocar o título
+  await page.click('.tab[data-view="evolucao"]');
+  checar(!(await page.locator('#view-evolucao').isHidden()), 'aba Evolução não abriu');
+  checar((await page.textContent('#topTitle')).trim() === 'Evolução', 'título do topo não virou "Evolução"');
+  checar(await page.locator('#btnAjustes.is-on').count() === 0, 'engrenagem continuou ativa fora dos Ajustes');
 
   // mamada cronometrada com troca de lado (a tela abre pela ação rápida "Mamada")
   await page.click('.tab[data-view="agora"]');
@@ -153,7 +163,7 @@ try {
   await shot('diario.png');
 
   // config de WhatsApp: liga, preenche e testa o "Enviar teste" (fetch stubado)
-  await page.click('.tab[data-view="ajustes"]');
+  await page.click('#btnAjustes');
   await page.check('#waEnabled');
   checar(!(await page.locator('#waFields').isHidden()), 'campos de WhatsApp não apareceram ao ligar');
   await page.selectOption('#waProvider', 'waha');

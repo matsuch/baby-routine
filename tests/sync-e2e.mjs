@@ -51,14 +51,14 @@ const CODE = 'familia-teste-123';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function ligarSync(page) {
-  await page.click('.tab[data-view="ajustes"]');
+  await page.click('#btnAjustes');
   await page.check('#syncEnabled');
   await page.fill('#syncCode', CODE);
   await page.dispatchEvent('#syncCode', 'change');
   await sleep(400);
 }
 async function syncAgora(page) {
-  await page.click('.tab[data-view="ajustes"]');
+  await page.click('#btnAjustes');
   await page.click('#syncNow');
   await sleep(350);
 }
@@ -96,7 +96,7 @@ try {
   await propagar(B, A, async () => (await contarTipo(A, 'diaper')) >= 2, 'A não recebeu o cocô de B');
 
   // Nome do bebê definido em A sincroniza para B (perfil)
-  await A.click('.tab[data-view="ajustes"]');
+  await A.click('#btnAjustes');
   await A.fill('#setName', 'Teresa');
   await A.dispatchEvent('#setName', 'input');
   await propagar(A, B, async () => (await B.evaluate(() => JSON.parse(localStorage.getItem('rotina-bebe:v1')).baby.name)) === 'Teresa',
