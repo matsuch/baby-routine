@@ -23,6 +23,7 @@
   --sleep-soft: #24244a;
   --diaper: #86e3bf;         /* menta — fralda / meta atingida */
   --diaper-soft: #16281f;
+  --poo: #d9a066;            /* caramelo — cocô (separa de menta e lilás em daltonismo) */
   --danger: #ff90a6;
   --late: #ff7d93;
 
@@ -304,10 +305,13 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 .day-nav strong { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; }
 .day-nav .icon-btn:disabled { opacity: .35; }
 
-/* gráfico semanal de sono */
+/* gráficos de 7 dias do Diário (sono, xixis, cocôs) */
 .weekchart { width: 100%; height: auto; display: block; margin-top: 12px; }
-.wc-bar { fill: color-mix(in oklab, var(--sleep) 55%, var(--surface-2)); }
-.wc-bar.is-today { fill: var(--sleep); }
+.wc-bar { fill: color-mix(in oklab, var(--wc-tom) 55%, var(--surface-2)); }
+.wc-bar.is-today { fill: var(--wc-tom); }
+.wc-bar--sono { --wc-tom: var(--sleep); }
+.wc-bar--xixi { --wc-tom: var(--diaper); }
+.wc-bar--coco { --wc-tom: var(--poo); }
 .wc-day { fill: var(--muted); font-size: 11px; font-weight: 700; text-anchor: middle; }
 .wc-val { fill: var(--muted); font-size: 10px; font-weight: 700; text-anchor: middle; }
 

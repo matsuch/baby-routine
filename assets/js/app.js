@@ -603,11 +603,27 @@ function renderAgora() {
   renderResumo($('#todayGrid'), S.daySummary());
   renderSleepBar($('#sleepBar'));
 
-  const recentes = $('#recentList');
-  recentes.innerHTML = '';
-  const ultimos = state.events.filter((e) => !e.deleted).slice(-6).reverse();
-  if (!ultimos.length) recentes.append(el('p', 'empty', 'Ainda nada registrado hoje.'));
-  else ultimos.forEach((ev) => recentes.append(linhaEvento(ev)));
+  renderRegistros();
+}
+
+/** Bloco "Registros" da Home: navegação por dia, órbita do dia e linha do tempo. */
+function renderRegistros() {
+  const ref = refDia();
+  $('#dayLabel').textContent = diaDiario === 0 ? 'Hoje'
+    : diaDiario === -1 ? 'Ontem'
+    : ref.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+  $('#dayNext').disabled = diaDiario >= 0;
+
+  // A órbita de hoje já é o herói no topo; só desenha o relógio ao voltar no tempo.
+  const relogio = $('#dayClock');
+  relogio.hidden = diaDiario === 0;
+  if (!relogio.hidden) renderRelogioDia(relogio, ref);
+
+  const linha = $('#timeline');
+  linha.innerHTML = '';
+  const eventos = [...S.daySummary(ref).eventos].reverse();
+  if (!eventos.length) linha.append(el('p', 'empty', 'Nenhum registro neste dia.'));
+  eventos.forEach((ev) => linha.append(linhaEvento(ev)));
 }
 
 function renderResumo(grid, resumo) {
@@ -1000,39 +1016,67 @@ function refDia() {
 }
 
 function renderDiario() {
-  const ref = refDia();
-  const resumo = S.daySummary(ref);
-  $('#dayLabel').textContent = diaDiario === 0 ? 'Hoje'
-    : diaDiario === -1 ? 'Ontem'
-    : ref.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
-  $('#dayNext').disabled = diaDiario >= 0;
-  renderResumo($('#dayGrid'), resumo);
-  renderRelogioDia($('#dayClock'), ref);
-  renderSleepBar($('#daySleepBar'), ref);
-  renderSemana($('#weekChart'));
-
-  const linha = $('#timeline');
-  linha.innerHTML = '';
-  const eventos = [...resumo.eventos].reverse();
-  if (!eventos.length) linha.append(el('p', 'empty', 'Nenhum registro neste dia.'));
-  eventos.forEach((ev) => linha.append(linhaEvento(ev)));
+  renderResumo($('#dayGrid'), S.daySummary());
+  renderChart7d($('#chartSono'), CHARTS_7D.sono);
+  renderChart7d($('#chartXixi'), CHARTS_7D.xixi);
+  renderChart7d($('#chartCoco'), CHARTS_7D.coco);
 }
 
-/** Gráfico de barras: sono (horas) nos últimos 7 dias — estilo Napper. */
-function renderSemana(container) {
+/**
+ * As três séries de 7 dias do Diário. Cada uma lê uma métrica do resumo diário
+ * e traz seu próprio formato — o gráfico em si não sabe de que métrica se trata.
+ * `piso` é o mínimo da escala, para um dia fraco não virar uma barra gigante.
+ */
+const CHARTS_7D = {
+  sono: {
+    titulo: '😴 Sono',
+    tom: 'sono',
+    piso: 8,
+    ler: (r) => r.minutosDormindo / 60,
+    rotulo: (v) => `${Math.round(v)}h`,
+    media: (v) => fmtMin(v * 60),
+    descricao: (v) => fmtMin(v * 60),
+  },
+  xixi: {
+    titulo: '💧 Xixis',
+    tom: 'xixi',
+    piso: 4,
+    ler: (r) => r.xixis,
+    rotulo: (v) => String(v),
+    media: (v) => v.toFixed(1).replace('.', ','),
+    descricao: (v) => `${v} xixi${v === 1 ? '' : 's'}`,
+  },
+  coco: {
+    titulo: '💩 Cocôs',
+    tom: 'coco',
+    piso: 3,
+    ler: (r) => r.cocos,
+    rotulo: (v) => String(v),
+    media: (v) => v.toFixed(1).replace('.', ','),
+    descricao: (v) => `${v} cocô${v === 1 ? '' : 's'}`,
+  },
+};
+
+const DIA_INICIAL = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
+
+/**
+ * Gráfico de barras dos últimos 7 dias (mais antigo à esquerda, hoje à direita),
+ * com o valor de cada dia rotulado sobre a barra. Série única: quem nomeia a
+ * métrica é o título, então a cor nunca é o único indício do que está ali.
+ */
+function renderChart7d(container, spec) {
   container.innerHTML = '';
   const dias = [];
   for (let i = 6; i >= 0; i -= 1) { const d = new Date(); d.setDate(d.getDate() - i); dias.push(d); }
-  const horas = dias.map((d) => S.daySummary(d).minutosDormindo / 60);
-  const totalMin = dias.reduce((t, d) => t + S.daySummary(d).minutosDormindo, 0);
-  const comDados = horas.filter((h) => h > 0).length;
-  const media = comDados ? totalMin / comDados : 0;
-  const max = Math.max(8, ...horas);
+  const valores = dias.map((d) => spec.ler(S.daySummary(d)));
+  const comDados = valores.filter((v) => v > 0).length;
+  const media = comDados ? valores.reduce((t, v) => t + v, 0) / comDados : 0;
+  const max = Math.max(spec.piso, ...valores);
 
   const card = el('div', 'card');
   const topo = el('div', 'sleepbar-top');
-  topo.append(el('span', null, '📊 Sono nos últimos 7 dias'),
-    el('strong', null, `média ${media ? fmtMin(media) : '—'}`));
+  topo.append(el('span', null, spec.titulo),
+    el('strong', null, `média ${media ? spec.media(media) : '—'}`));
   card.append(topo);
 
   const NS = 'http://www.w3.org/2000/svg';
@@ -1049,10 +1093,22 @@ function renderSemana(container) {
   };
   dias.forEach((d, i) => {
     const x = gap + i * (bw + gap);
-    const h = Math.round((horas[i] / max) * (base - 12));
-    add('rect', { x, y: base - h, width: bw, height: Math.max(h, 2), rx: 6, class: i === 6 ? 'wc-bar is-today' : 'wc-bar' });
-    add('text', { x: x + bw / 2, y: base + 14, class: 'wc-day' }, ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'][d.getDay()]);
-    if (horas[i] > 0) add('text', { x: x + bw / 2, y: base - h - 4, class: 'wc-val' }, Math.round(horas[i]) + 'h');
+    const h = Math.round((valores[i] / max) * (base - 12));
+    const hoje = i === 6;
+    // Dia zerado não ganha barra: um traço de 2px na base leria como artefato.
+    if (valores[i] > 0) {
+      const altura = Math.max(h, 2);
+      const barra = add('rect', {
+        x, y: base - altura, width: bw, height: altura, rx: 6,
+        class: `wc-bar wc-bar--${spec.tom}${hoje ? ' is-today' : ''}`,
+      });
+      const quando = hoje ? 'hoje' : d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+      const titulo = document.createElementNS(NS, 'title');
+      titulo.textContent = `${quando}: ${spec.descricao(valores[i])}`;
+      barra.append(titulo);
+    }
+    add('text', { x: x + bw / 2, y: base + 14, class: 'wc-day' }, DIA_INICIAL[d.getDay()]);
+    if (valores[i] > 0) add('text', { x: x + bw / 2, y: base - h - 4, class: 'wc-val' }, spec.rotulo(valores[i]));
   });
   card.append(svg);
   container.append(card);

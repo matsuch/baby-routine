@@ -47,8 +47,18 @@
     <div class="today-grid" id="todayGrid"></div>
     <div id="sleepBar"></div>
 
-    <h2 class="section-title">Últimos registros</h2>
-    <div class="stack" id="recentList"></div>
+    <h2 class="section-title">Registros</h2>
+    <div class="day-nav">
+      <button class="icon-btn" id="dayPrev" type="button" aria-label="Dia anterior">‹</button>
+      <strong id="dayLabel">Hoje</strong>
+      <button class="icon-btn" id="dayNext" type="button" aria-label="Próximo dia">›</button>
+    </div>
+    <div class="clock-wrap" id="dayClock"></div>
+    <div class="row-2">
+      <button class="btn btn-ghost" id="btnAgenda" type="button">Agenda do dia</button>
+      <button class="btn btn-ghost" id="btnResumo" type="button">Copiar resumo</button>
+    </div>
+    <div class="stack" id="timeline"></div>
   </section>
 
   <!-- ============ MAMADA ============ -->
@@ -81,21 +91,14 @@
 
   <!-- ============ DIÁRIO ============ -->
   <section class="view" id="view-diario" hidden>
-    <div class="day-nav">
-      <button class="icon-btn" id="dayPrev" type="button" aria-label="Dia anterior">‹</button>
-      <strong id="dayLabel">Hoje</strong>
-      <button class="icon-btn" id="dayNext" type="button" aria-label="Próximo dia">›</button>
-    </div>
+    <h2 class="section-title">Hoje</h2>
     <div class="today-grid" id="dayGrid"></div>
-    <div class="clock-wrap" id="dayClock"></div>
-    <div id="daySleepBar"></div>
-    <div id="weekChart"></div>
-    <div class="row-2">
-      <button class="btn btn-ghost" id="btnAgenda" type="button">Agenda do dia</button>
-      <button class="btn btn-ghost" id="btnResumo" type="button">Copiar resumo</button>
+    <h2 class="section-title">Últimos 7 dias</h2>
+    <div class="stack">
+      <div id="chartSono"></div>
+      <div id="chartXixi"></div>
+      <div id="chartCoco"></div>
     </div>
-    <h2 class="section-title">Linha do tempo</h2>
-    <div class="stack" id="timeline"></div>
   </section>
 
   <!-- ============ AJUSTES ============ -->
