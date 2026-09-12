@@ -49,7 +49,7 @@ export function countdown(ts) {
   return { label: `em ${fmtGap(diff)}`, state: 'ok' };
 }
 
-/** Idade do bebê em dias/semanas, para o subtítulo. */
+/** Idade do bebê em meses/semanas/dias, para o subtítulo. */
 export function fmtAge(birth) {
   if (!birth) return '';
   const nasc = new Date(`${birth}T00:00:00`);
@@ -58,9 +58,19 @@ export function fmtAge(birth) {
   if (dias < 0) return '';
   if (dias === 0) return 'nasceu hoje 💛';
   if (dias === 1) return '1 dia de vida';
-  if (dias < 14) return `${dias} dias de vida`;
-  const semanas = Math.floor(dias / 7);
-  return `${semanas} semanas (${dias} dias)`;
+  if (dias < 7) return `${dias} dias de vida`;
+  if (dias < 30) {
+    const sem = Math.floor(dias / 7);
+    const rest = dias % 7;
+    const parts = [`${sem} semana${sem > 1 ? 's' : ''}`];
+    if (rest > 0) parts.push(`${rest}d`);
+    return parts.join(' e ') + ' de vida';
+  }
+  const meses = Math.floor(dias / 30);
+  const rest = dias % 30;
+  const parts = [`${meses} ${meses > 1 ? 'meses' : 'mês'}`];
+  if (rest > 0) parts.push(`${rest}d`);
+  return parts.join(' e ') + ' de vida';
 }
 
 /** Valor para <input type="datetime-local">. */

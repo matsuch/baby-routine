@@ -74,7 +74,7 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
   background: linear-gradient(var(--bg) 62%, rgba(20, 22, 43, 0));
 }
 .topbar h1 { font-size: 27px; line-height: 1; }
-.topbar-sub { margin: 5px 0 0; color: var(--muted); font-size: 13px; font-weight: 600; }
+.topbar-sub { margin: 5px 0 0; color: var(--muted); font-size: 17px; font-weight: 600; }
 
 .icon-btn {
   border: 1px solid var(--line); background: var(--surface);

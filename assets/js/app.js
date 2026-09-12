@@ -13,7 +13,7 @@ const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
 
 const TITULOS = {
-  agora: 'Agora',
+  agora: 'Início',
   mamada: 'Mamada',
   remedios: 'Alertas',
   diario: 'Diário',
@@ -1280,7 +1280,6 @@ function render() {
   const nome = state.baby.name?.trim();
   const idade = fmtAge(state.baby.birth);
   $('#topSub').textContent = [nome, idade].filter(Boolean).join(' · ') || 'Toque em Ajustes para dar um nome 💛';
-  $('#btnNotify').classList.toggle('is-on', !!state.settings.notify);
 
   if (viewAtual === 'agora') renderAgora();
   else if (viewAtual === 'mamada') renderMamada();
@@ -1570,15 +1569,6 @@ function ligarEventos() {
     } else {
       state.settings.notify = false;
       S.save();
-    }
-  });
-  $('#btnNotify').addEventListener('click', async () => {
-    if (state.settings.notify) {
-      state.settings.notify = false;
-      S.save();
-      toast('Avisos desligados');
-    } else {
-      await pedirPermissao();
     }
   });
 
