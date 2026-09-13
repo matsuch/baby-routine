@@ -16,7 +16,7 @@ tudo no próprio celular** (nenhum dado sai do aparelho, nenhuma conta, nenhum s
 | **Sono** | Cronômetro dedicado; janela de sono por idade prevê a próxima soneca; **relógio do dia (24h)** na Início mostra sono × mamadas ao voltar para um dia anterior. As janelas e o total recomendado são **referências gerais por idade — não é conselho médico**. |
 | **Remédios** | Cada remédio com seu intervalo. "Tomei agora" recalcula a próxima dose sozinho. Já vem com Cefalexina 6h, Paracetamol 8h e Profenid 12h — é só editar ou apagar. |
 | **Diário** | Só gráficos: os números de hoje e três barras dos **últimos 7 dias** — sono, xixis e cocôs — com o valor de cada dia rotulado. |
-| **Evolução** | Em construção. Vai comparar o crescimento com o esperado para a idade: peso e altura, tempo de mamada e de sono, xixis e cocôs. |
+| **Evolução** | Peso e altura no topo, com o **percentil da curva da OMS** para a idade e o sexo, e a faixa esperada. Abaixo, a média de xixis, cocôs e sono dos últimos 7 dias comparada com a referência da idade. Os gráficos do Diário ganham uma **linha tracejada de meta**. Onde não há referência honesta — a frequência de cocô depois das primeiras semanas — o app diz "sem meta" em vez de inventar uma. **Referências gerais: não é conselho médico.** |
 | **Ajustes** | Na **engrenagem do canto superior direito**, disponível em qualquer aba: nome e nascimento do bebê, intervalo entre mamadas, avisos, **notificações no WhatsApp** e backup dos dados. |
 
 ## Notificações push pelo ntfy (recomendado — simples, sem servidor)

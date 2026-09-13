@@ -60,11 +60,16 @@ try {
   await page.fill('#setName', 'Teresa');
   await page.selectOption('#setInterval', '180');
 
-  // evolução: por ora só a casca, mas precisa abrir e trocar o título
+  // evolução
   await page.click('.tab[data-view="evolucao"]');
   checar(!(await page.locator('#view-evolucao').isHidden()), 'aba Evolução não abriu');
   checar((await page.textContent('#topTitle')).trim() === 'Evolução', 'título do topo não virou "Evolução"');
   checar(await page.locator('#btnAjustes.is-on').count() === 0, 'engrenagem continuou ativa fora dos Ajustes');
+  // Sem sexo informado não há curva da OMS — a tela precisa dizer o que falta.
+  checar((await page.textContent('#evolucaoNota')).includes('o sexo'),
+    'Evolução não avisou que falta o sexo para comparar com a OMS');
+  checar((await page.locator('#medidaGrid .measure-val').allTextContents()).every((t) => t.trim() === '—'),
+    'peso e altura deveriam estar vazios antes de qualquer medida');
 
   // mamada cronometrada com troca de lado (a tela abre pela ação rápida "Mamada")
   await page.click('.tab[data-view="agora"]');
@@ -143,8 +148,34 @@ try {
   await page.click('#dayNext');
   await shot('agora.png');
 
+  // com nascimento e sexo, as curvas da OMS entram e os gráficos ganham meta.
+  // 43 dias: passou das 6 semanas, então cocô deixa de ter meta (variação normal).
+  const nasc = new Date(Date.now() - 43 * 86400000).toISOString().slice(0, 10);
+  await page.click('#btnAjustes');
+  await page.fill('#setBirth', nasc);
+  await page.selectOption('#setSex', 'female');
+
+  await page.click('.tab[data-view="evolucao"]');
+  checar(!(await page.textContent('#evolucaoNota')).includes('Informe'),
+    'Evolução ainda pedia dados depois de nascimento e sexo preenchidos');
+  await page.click('#btnMedida');
+  await page.fill('#sheetBody input[name="peso"]', '4.35');
+  await page.fill('#sheetBody input[name="altura"]', '55.2');
+  await page.click('#sheetBody button[type="submit"]');
+  const chips = await page.locator('#medidaGrid .chip-faixa').allTextContents();
+  checar(chips.length === 2, `esperava um percentil para peso e outro para altura, vieram ${chips.length}`);
+  checar(chips.every((t) => /^P\d+/.test(t.trim())), `card sem percentil: ${JSON.stringify(chips)}`);
+  checar(await page.locator('#medidaGrid .chip-faixa.is-esperado').count() === 2,
+    '4,35kg e 55,2cm aos 43 dias caem dentro da faixa da OMS e deveriam vir como esperado');
+  checar((await page.locator('#medidaGrid .measure-val').allTextContents()).some((t) => t.includes('4,35')),
+    'card de peso não mostrou o valor registrado');
+  await shot('evolucao.png');
+
   // diário: só gráficos — sono, xixis e cocôs dos últimos 7 dias
   await page.click('.tab[data-view="diario"]');
+  checar(await page.locator('#chartSono .wc-meta').count() === 2, 'sono deveria ter as duas linhas de meta (mín. e máx.)');
+  checar(await page.locator('#chartXixi .wc-meta').count() === 1, 'xixi deveria ter uma linha de meta (mínimo)');
+  checar(await page.locator('#chartCoco .wc-meta').count() === 0, 'aos 43 dias cocô não deveria ter linha de meta');
   // o sono deste teste dura menos de um minuto: arredonda para 0h, então o
   // gráfico de sono fica legitimamente sem nenhuma barra — só xixi e cocô têm contagem.
   for (const [id, nome, temDados] of [['#chartSono', 'sono', false], ['#chartXixi', 'xixis', true], ['#chartCoco', 'cocôs', true]]) {
