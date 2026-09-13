@@ -77,6 +77,10 @@ function autorizado(req) {
   const auth = req.headers.authorization || '';
   const url = new URL(req.url, 'http://x');
   const dado = auth.replace(/^Bearer\s+/i, '') || req.headers['x-cron-secret'] || url.searchParams.get('key') || '';
+  if (dado !== esperado) {
+    console.warn('[cron] 401 — esperado %d chars, recebido %d chars, auth header %s',
+      esperado.length, dado.length, auth ? 'presente' : 'ausente');
+  }
   return dado === esperado;
 }
 
