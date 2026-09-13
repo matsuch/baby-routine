@@ -372,6 +372,26 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 .item-edit:active { color: var(--sleep); }
 .item.editavel .item-body { cursor: pointer; }
 .item.editavel .item-body:active { opacity: .6; }
+
+/* registro em andamento: o cronômetro ainda está rodando, nada foi fechado */
+.item.is-live {
+  border-color: color-mix(in oklab, var(--accent) 42%, var(--line));
+  background: color-mix(in oklab, var(--accent) 7%, var(--surface));
+}
+.live-pill {
+  display: inline-flex; align-items: center; gap: 5px; vertical-align: 1px;
+  margin-left: 6px; padding: 1px 8px 1px 6px; border-radius: 999px;
+  font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em;
+  color: var(--accent); white-space: nowrap;
+  background: color-mix(in oklab, var(--accent) 18%, transparent);
+  border: 1px solid color-mix(in oklab, var(--accent) 40%, transparent);
+}
+.live-pill i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: livedot 1.6s ease-in-out infinite; }
+@keyframes livedot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .3; transform: scale(.65); }
+}
+@media (prefers-reduced-motion: reduce) { .live-pill i { animation: none; } }
 .empty { color: var(--muted); text-align: center; padding: 26px 8px; font-size: 14px; font-weight: 600; }
 
 /* ---------- timer (mamada / arroto / sono) ---------- */

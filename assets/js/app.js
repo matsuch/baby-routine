@@ -220,8 +220,8 @@ function renderSleepBar(container, ref = new Date()) {
 /** Relógio do dia (24h): sono como arcos, mamadas como marcas. */
 function renderRelogioDia(container, ref = new Date()) {
   container.innerHTML = '';
-  const [inicio, fim] = S.dayBounds(ref);
-  const eventos = S.eventsBetween(inicio, fim);
+  const [inicio] = S.dayBounds(ref);
+  const eventos = S.daySummary(ref).eventos;
   const cx = 100;
   const cy = 100;
   const r = 74;
@@ -543,10 +543,12 @@ function atualizarHero(container, { foco, inicio }) {
 function renderHero(container) {
   const foco = heroFoco();
   const [inicio, fim] = S.dayBounds();
-  const doDia = S.eventsBetween(inicio, fim);
+  const doDia = S.daySummary().eventos;
   const feeds = doDia.filter((e) => e.type === 'feed');
   const burps = doDia.filter((e) => e.type === 'burp');
-  const segs = S.sleepSegmentsInDay();
+  // A soneca em andamento tem arco próprio (cresce a cada tick), então fica
+  // fora dos segmentos fixos — senão o herói seria remontado de segundo em segundo.
+  const segs = S.sleepSegmentsInDay().filter((seg) => !seg.ongoing);
 
   // Assinatura do que é "estático" (tudo menos o segundo atual).
   const sig = JSON.stringify({
@@ -625,7 +627,12 @@ function renderRegistros() {
 
   const linha = $('#timeline');
   linha.innerHTML = '';
-  const eventos = [...S.daySummary(ref).eventos].reverse();
+  // Mais recente em cima; o que está em andamento fica no topo da lista.
+  const doDia = S.daySummary(ref).eventos;
+  const eventos = [
+    ...doDia.filter((e) => e.ongoing).sort((a, b) => b.at - a.at),
+    ...doDia.filter((e) => !e.ongoing).reverse(),
+  ];
   if (!eventos.length) linha.append(el('p', 'empty', 'Nenhum registro neste dia.'));
   eventos.forEach((ev) => linha.append(linhaEvento(ev)));
 }
@@ -648,7 +655,7 @@ function renderResumo(grid, resumo) {
 
 /* ================================================================ linhas de evento */
 
-const EVENTO_EMOJI = { feed: '🍼', diaper: '💧', sleep: '😴', med: '💊', burp: '💨', note: '📝' };
+const EVENTO_EMOJI = { feed: '🍼', diaper: '💧', sleep: '😴', med: '💊', burp: '💨', measure: '⚖️', note: '📝' };
 
 function tituloEvento(ev) {
   switch (ev.type) {
@@ -657,24 +664,36 @@ function tituloEvento(ev) {
     case 'sleep': return 'Sono';
     case 'med': return ev.name;
     case 'burp': return 'Arroto';
+    case 'measure': return 'Peso e altura';
     default: return 'Anotação';
   }
 }
 
 function subtituloEvento(ev) {
+  // Em andamento: o subtítulo é o cronômetro rodando (o tick redesenha a lista).
+  if (ev.ongoing) {
+    const decorrido = fmtGap(Date.now() - ev.at);
+    if (ev.type === 'feed') return `${decorrido} · lado ${SIDE_LABEL[ev.lastSide] || '—'}`;
+    if (ev.type === 'burp') return `${decorrido} no colo · meta ${BURP_TARGET_MIN}min`;
+    return `dormindo há ${decorrido}`;
+  }
   switch (ev.type) {
     case 'feed': return describeFeed(ev);
     case 'sleep': return ev.endAt
       ? `${fmtMin((ev.endAt - ev.at) / MS_MIN)} · até ${fmtTime(ev.endAt)}`
-      : 'em andamento';
+      : 'sem hora de acordar';
     case 'med': return ev.dose || 'dose tomada';
     case 'burp': return ev.durationMin ? `${fmtMin(ev.durationMin)} no colo` : 'arrotou';
+    case 'measure': return [
+      ev.weightKg > 0 ? `${num(ev.weightKg, 2)}kg` : null,
+      ev.heightCm > 0 ? `${num(ev.heightCm, 1)}cm` : null,
+    ].filter(Boolean).join(' · ') || 'sem valores';
     case 'note': return ev.text || '';
     default: return '';
   }
 }
 
-const EVENTO_TONE = { feed: 'lamp', sleep: 'sleep', burp: 'leaf', med: 'med', diaper: 'aqua', note: '' };
+const EVENTO_TONE = { feed: 'lamp', sleep: 'sleep', burp: 'leaf', med: 'med', diaper: 'aqua', measure: 'leaf', note: '' };
 
 /** Categorias dos alertas (picklist do cadastro). O id é o que fica salvo. */
 const CATEGORIAS = [
@@ -703,31 +722,65 @@ function repeatLabel(med) {
   return `a cada ${every === 1 ? '' : `${every} `}${every === 1 ? u.sing : u.label}`;
 }
 
+/** A ficha de edição de cada tipo de registro (em andamento: só o início). */
+function editarEvento(ev) {
+  if (ev.ongoing) return sheetAndamento(ev);
+  switch (ev.type) {
+    case 'feed': return sheetMamada(ev);
+    case 'sleep': return sheetSono(ev);
+    case 'diaper': return sheetFralda(ev);
+    case 'burp': return sheetArroto(ev);
+    case 'med': return sheetDose(ev);
+    case 'measure': return sheetMedida(ev);
+    default: return sheetAnotacao(ev);
+  }
+}
+
 function linhaEvento(ev, { apagavel = true } = {}) {
   const item = el('div', 'item');
   let emoji = ev.type === 'diaper' && ev.kind !== 'xixi' ? '💩' : EVENTO_EMOJI[ev.type] || '•';
   let tint = EVENTO_TONE[ev.type] || 'plain';
   if (ev.type === 'med') { const c = catInfo(ev.category); emoji = c.emoji; tint = c.tint; }
   item.append(el('div', `emoji tint-${tint}`, emoji));
+
   const corpo = el('div', 'item-body');
-  corpo.append(el('div', 'item-title', tituloEvento(ev)), el('div', 'item-sub', subtituloEvento(ev)));
-  item.append(corpo, el('div', 'item-time', fmtTime(ev.at)));
-  // Sono já concluído: toque para editar o horário (e, com isso, a duração).
-  if (ev.type === 'sleep' && ev.endAt) {
-    item.classList.add('editavel');
-    corpo.setAttribute('role', 'button');
-    corpo.setAttribute('tabindex', '0');
-    corpo.addEventListener('click', () => sheetSono(ev));
-    corpo.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sheetSono(ev); } });
-    const editar = el('button', 'item-edit', '✎');
-    editar.title = 'Editar sono';
-    editar.addEventListener('click', () => sheetSono(ev));
-    item.append(editar);
+  const titulo = el('div', 'item-title');
+  titulo.textContent = tituloEvento(ev);
+  if (ev.ongoing) {
+    item.classList.add('is-live');
+    titulo.append(' ', el('span', 'live-pill', '<i></i>em andamento'));
   }
+  const sub = el('div', 'item-sub');
+  sub.textContent = subtituloEvento(ev);
+  corpo.append(titulo, sub);
+  item.append(corpo, el('div', 'item-time', fmtTime(ev.at)));
+
+  // Todo registro é editável: toque no corpo (ou no lápis) abre a ficha dele.
+  item.classList.add('editavel');
+  corpo.setAttribute('role', 'button');
+  corpo.setAttribute('tabindex', '0');
+  corpo.addEventListener('click', () => editarEvento(ev));
+  corpo.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); editarEvento(ev); }
+  });
+  const editar = el('button', 'item-edit', '✎');
+  editar.title = ev.ongoing ? 'Editar o início' : 'Editar registro';
+  editar.addEventListener('click', () => editarEvento(ev));
+  item.append(editar);
+
   if (apagavel) {
     const del = el('button', 'item-del', '✕');
-    del.title = 'Apagar registro';
+    del.title = ev.ongoing ? 'Cancelar em andamento' : 'Apagar registro';
     del.addEventListener('click', () => {
+      // Em andamento ainda não é histórico: apagar aqui é cancelar o cronômetro.
+      if (ev.ongoing) {
+        if (confirm('Cancelar este registro em andamento? Ele não vai para o histórico.')) {
+          S.cancelOngoing(ev.ongoing);
+          burpAvisado = false;
+          toast('Registro em andamento cancelado');
+        }
+        return;
+      }
       if (confirm('Apagar este registro?')) {
         S.removeEvent(ev.id);
         toast('Registro apagado');
@@ -787,38 +840,79 @@ function renderMamada() {
 
   const lista = $('#feedList');
   lista.innerHTML = '';
-  const feeds = S.daySummary().eventos.filter((e) => e.type === 'feed').reverse();
+  const doDia = S.daySummary().eventos.filter((e) => e.type === 'feed');
+  const feeds = [...doDia.filter((e) => e.ongoing), ...doDia.filter((e) => !e.ongoing).reverse()];
   if (!feeds.length) lista.append(el('p', 'empty', 'Nenhuma mamada registrada hoje.'));
   feeds.forEach((ev) => lista.append(linhaEvento(ev)));
 }
 
-function sheetMamadaManual() {
+/** Que opção de lado mostrar no editor de uma mamada já salva. */
+function ladoDaMamada(ev) {
+  if (ev.bottle) return 'mamadeira';
+  const lados = Object.entries(ev.sides || {}).filter(([, min]) => min > 0);
+  if (lados.length > 1) return 'ambos';
+  if (lados.length === 1) return lados[0][0];
+  return ev.lastSide || 'ambos';
+}
+
+/**
+ * Traduz "lado + duração" nos campos do evento. Em "os dois", mantém a
+ * proporção que já estava registrada; sem essa informação, não inventa a
+ * divisão (fica só a duração total, como sempre foi no registro manual).
+ */
+function ladosDaMamada(side, min, ev = null) {
+  if (side === 'E' || side === 'D') return { sides: { [side]: min }, lastSide: side, bottle: false };
+  if (side === 'mamadeira') return { sides: {}, lastSide: null, bottle: true };
+  const e = (ev && ev.sides && ev.sides.E) || 0;
+  const d = (ev && ev.sides && ev.sides.D) || 0;
+  const anterior = ev ? ev.lastSide || null : null;
+  if (e + d > 0) {
+    const parteE = Math.round((min * e) / (e + d));
+    return { sides: { E: parteE, D: min - parteE }, lastSide: anterior, bottle: false };
+  }
+  return { sides: {}, lastSide: anterior, bottle: false };
+}
+
+/** Registrar (ev = null) ou editar uma mamada já concluída. */
+function sheetMamada(ev = null) {
+  const inicio = ev ? ev.at : Date.now() - 30 * MS_MIN;
+  const minAtual = ev
+    ? ev.durationMin || Math.max(1, Math.round(((ev.endAt || ev.at) - ev.at) / MS_MIN))
+    : 20;
+  const ladoAtual = ev ? ladoDaMamada(ev) : '';
+  const opcoes = [['E', 'Esquerdo'], ['D', 'Direito'], ['ambos', 'Os dois'], ['mamadeira', 'Mamadeira']]
+    .map(([v, rotulo]) => `<option value="${v}"${v === ladoAtual ? ' selected' : ''}>${rotulo}</option>`)
+    .join('');
   const form = el('form');
   form.innerHTML = `
     <label class="field"><span>Começou às</span>
-      <input type="datetime-local" name="at" value="${toLocalInput(Date.now() - 30 * MS_MIN)}" required></label>
+      <input type="datetime-local" name="at" value="${toLocalInput(inicio)}" required></label>
     <label class="field"><span>Duração (minutos)</span>
-      <input type="number" name="min" value="20" min="1" max="240" inputmode="numeric" required></label>
+      <input type="number" name="min" value="${minAtual}" min="1" max="240" inputmode="numeric" required></label>
     <label class="field"><span>Lado</span>
-      <select name="side"><option value="E">Esquerdo</option><option value="D">Direito</option>
-      <option value="ambos">Os dois</option><option value="mamadeira">Mamadeira</option></select></label>
-    <button class="btn btn-primary block" type="submit">Salvar mamada</button>`;
+      <select name="side">${opcoes}</select></label>
+    <button class="btn btn-primary block" type="submit">Salvar mamada</button>
+    ${ev ? '<button class="btn btn-ghost block" type="button" id="mamadaDel">Apagar registro</button>' : ''}`;
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     const dados = new FormData(form);
     const at = fromLocalInput(dados.get('at'));
-    if (!at) return;
+    if (!at) { toast('Confira o horário'); return; }
     const min = Math.max(1, Number(dados.get('min')) || 1);
-    const side = dados.get('side');
-    const sides = side === 'E' || side === 'D' ? { [side]: min } : {};
-    S.addEvent({
-      type: 'feed', at, endAt: at + min * MS_MIN, durationMin: min, sides,
-      lastSide: side === 'E' || side === 'D' ? side : null,
-    });
+    const campos = {
+      at, endAt: at + min * MS_MIN, durationMin: min,
+      ...ladosDaMamada(dados.get('side'), min, ev),
+    };
+    if (ev) S.updateEvent(ev.id, campos);
+    else S.addEvent({ type: 'feed', ...campos });
     closeSheet();
-    toast('Mamada registrada');
+    toast(ev ? 'Mamada atualizada' : 'Mamada registrada');
   });
-  openSheet('Registrar mamada passada', form);
+  const del = form.querySelector('#mamadaDel');
+  if (del) del.addEventListener('click', () => {
+    if (confirm('Apagar esta mamada?')) { S.removeEvent(ev.id); closeSheet(); toast('Registro apagado'); }
+  });
+  openSheet(ev ? 'Editar mamada' : 'Registrar mamada passada', form);
 }
 
 /**
@@ -863,6 +957,163 @@ function sheetSono(ev = null) {
     if (confirm('Apagar este sono?')) { S.removeEvent(ev.id); closeSheet(); toast('Registro apagado'); }
   });
   openSheet(ev ? 'Editar sono' : 'Registrar sono passado', form);
+}
+
+/* ================================================================ fichas dos registros */
+
+/**
+ * Registro EM ANDAMENTO (mamada, sono ou arroto): enquanto o cronômetro roda,
+ * a única coisa que dá para corrigir é a hora em que começou — a duração é o
+ * relógio. Também dá para cancelar, e aí nada vai para o histórico.
+ */
+function sheetAndamento(ev) {
+  const NOME = { feed: 'mamada', sleep: 'sono', burp: 'arroto' };
+  const nome = NOME[ev.ongoing] || 'registro';
+  const form = el('form');
+  form.innerHTML = `
+    <p class="muted small">Em andamento: só o início pode mudar agora. A duração acompanha o
+      cronômetro e o resto fica editável quando você encerrar.</p>
+    <label class="field"><span>Começou às</span>
+      <input type="datetime-local" name="at" value="${toLocalInput(ev.at)}" max="${toLocalInput(Date.now())}" required></label>
+    <p class="muted small" id="andDur" aria-live="polite"></p>
+    <button class="btn btn-primary block" type="submit">Salvar início</button>
+    <button class="btn btn-ghost block" type="button" id="andCancel">Cancelar ${nome}</button>`;
+
+  const aviso = form.querySelector('#andDur');
+  const recalcular = () => {
+    const at = fromLocalInput(form.at.value);
+    if (!at) { aviso.textContent = 'Confira o horário.'; return; }
+    if (at > Date.now()) { aviso.textContent = 'O início não pode estar no futuro.'; return; }
+    aviso.textContent = `Já são ${fmtGap(Date.now() - at)} de ${nome}.`;
+  };
+  form.at.addEventListener('input', recalcular);
+  recalcular();
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const at = fromLocalInput(form.at.value);
+    if (!at) { toast('Confira o horário'); return; }
+    if (at > Date.now()) { toast('O início não pode estar no futuro'); return; }
+    S.setOngoingStart(ev.ongoing, at);
+    if (ev.ongoing === 'burp') burpAvisado = false; // a meta é recontada do novo início
+    closeSheet();
+    toast(`Início ajustado para ${fmtTime(at)}`);
+  });
+
+  form.querySelector('#andCancel').addEventListener('click', () => {
+    if (!confirm(`Cancelar este ${nome} em andamento? Ele não vai para o histórico.`)) return;
+    S.cancelOngoing(ev.ongoing);
+    burpAvisado = false;
+    closeSheet();
+    toast('Registro em andamento cancelado');
+  });
+
+  openSheet(`${tituloEvento(ev)} em andamento`, form);
+}
+
+/** Editar uma troca de fralda: horário e o que tinha nela. */
+function sheetFralda(ev) {
+  const TIPOS = [['xixi', '💧 Xixi'], ['cocô', '💩 Cocô'], ['xixi e cocô', '💧💩 Os dois']];
+  const atual = TIPOS.some(([k]) => k === ev.kind) ? ev.kind : 'xixi';
+  const opcoes = TIPOS
+    .map(([k, rotulo]) => `<option value="${k}"${k === atual ? ' selected' : ''}>${rotulo}</option>`)
+    .join('');
+  const form = el('form');
+  form.innerHTML = `
+    <label class="field"><span>Quando</span>
+      <input type="datetime-local" name="at" value="${toLocalInput(ev.at)}" required></label>
+    <label class="field"><span>O que tinha</span>
+      <select name="kind">${opcoes}</select></label>
+    <button class="btn btn-primary block" type="submit">Salvar troca</button>
+    <button class="btn btn-ghost block" type="button" id="fraldaDel">Apagar registro</button>`;
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const at = fromLocalInput(form.at.value);
+    if (!at) { toast('Confira o horário'); return; }
+    S.updateEvent(ev.id, { at, kind: form.kind.value });
+    closeSheet();
+    toast('Troca atualizada');
+  });
+  form.querySelector('#fraldaDel').addEventListener('click', () => {
+    if (confirm('Apagar esta troca?')) { S.removeEvent(ev.id); closeSheet(); toast('Registro apagado'); }
+  });
+  openSheet('Editar fralda', form);
+}
+
+/** Editar um arroto já registrado: início e quanto tempo no colo. */
+function sheetArroto(ev) {
+  const minAtual = ev.durationMin || Math.max(1, Math.round(((ev.endAt || ev.at) - ev.at) / MS_MIN));
+  const form = el('form');
+  form.innerHTML = `
+    <label class="field"><span>Começou às</span>
+      <input type="datetime-local" name="at" value="${toLocalInput(ev.at)}" required></label>
+    <label class="field"><span>Tempo no colo (minutos)</span>
+      <input type="number" name="min" value="${minAtual}" min="1" max="240" inputmode="numeric" required></label>
+    <button class="btn btn-primary block" type="submit">Salvar arroto</button>
+    <button class="btn btn-ghost block" type="button" id="arrotoDel">Apagar registro</button>`;
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const at = fromLocalInput(form.at.value);
+    if (!at) { toast('Confira o horário'); return; }
+    const min = Math.max(1, Number(form.min.value) || 1);
+    S.updateEvent(ev.id, { at, endAt: at + min * MS_MIN, durationMin: min });
+    closeSheet();
+    toast('Arroto atualizado');
+  });
+  form.querySelector('#arrotoDel').addEventListener('click', () => {
+    if (confirm('Apagar este arroto?')) { S.removeEvent(ev.id); closeSheet(); toast('Registro apagado'); }
+  });
+  openSheet('Editar arroto', form);
+}
+
+/** Editar uma dose/alerta já registrado: horário e descrição. */
+function sheetDose(ev) {
+  const form = el('form');
+  form.innerHTML = `
+    <label class="field"><span>Quando</span>
+      <input type="datetime-local" name="at" value="${toLocalInput(ev.at)}" required></label>
+    <label class="field"><span>Descrição (opcional)</span>
+      <input type="text" name="dose" placeholder="Ex.: 1 comprimido"></label>
+    <button class="btn btn-primary block" type="submit">Salvar registro</button>
+    <button class="btn btn-ghost block" type="button" id="doseDel">Apagar registro</button>`;
+  form.dose.value = ev.dose || '';
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const at = fromLocalInput(form.at.value);
+    if (!at) { toast('Confira o horário'); return; }
+    S.updateEvent(ev.id, { at, dose: form.dose.value.trim() });
+    closeSheet();
+    toast('Registro atualizado');
+  });
+  form.querySelector('#doseDel').addEventListener('click', () => {
+    if (confirm('Apagar este registro?')) { S.removeEvent(ev.id); closeSheet(); toast('Registro apagado'); }
+  });
+  openSheet(`Editar ${tituloEvento(ev)}`, form);
+}
+
+/** Editar uma anotação livre: horário e texto. */
+function sheetAnotacao(ev) {
+  const form = el('form');
+  form.innerHTML = `
+    <label class="field"><span>Quando</span>
+      <input type="datetime-local" name="at" value="${toLocalInput(ev.at)}" required></label>
+    <label class="field"><span>Anotação</span>
+      <input type="text" name="text" placeholder="O que aconteceu"></label>
+    <button class="btn btn-primary block" type="submit">Salvar anotação</button>
+    <button class="btn btn-ghost block" type="button" id="notaDel">Apagar registro</button>`;
+  form.text.value = ev.text || '';
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const at = fromLocalInput(form.at.value);
+    if (!at) { toast('Confira o horário'); return; }
+    S.updateEvent(ev.id, { at, text: form.text.value.trim() });
+    closeSheet();
+    toast('Anotação atualizada');
+  });
+  form.querySelector('#notaDel').addEventListener('click', () => {
+    if (confirm('Apagar esta anotação?')) { S.removeEvent(ev.id); closeSheet(); toast('Registro apagado'); }
+  });
+  openSheet('Editar anotação', form);
 }
 
 /* ================================================================ REMÉDIOS */
@@ -1238,21 +1489,25 @@ function renderEvolucaoRotina(container) {
   container.append(card);
 }
 
-function sheetMedida() {
+/** Registrar (ev = null) ou editar uma medição de peso/altura. */
+function sheetMedida(ev = null) {
   const form = el('form');
   const ultimoPeso = S.ultimaMedida('weightKg');
   const ultimaAltura = S.ultimaMedida('heightCm');
   form.innerHTML = `
     <label class="field"><span>Quando</span>
-      <input type="datetime-local" name="at" value="${toLocalInput(Date.now())}" required></label>
+      <input type="datetime-local" name="at" value="${toLocalInput(ev ? ev.at : Date.now())}" required></label>
     <label class="field"><span>Peso (kg)</span>
       <input type="number" name="peso" step="0.005" min="0.5" max="40" inputmode="decimal"
+        value="${ev && ev.weightKg > 0 ? ev.weightKg : ''}"
         placeholder="${ultimoPeso ? num(ultimoPeso.weightKg, 3) : 'ex.: 4,25'}"></label>
     <label class="field"><span>Altura (cm)</span>
       <input type="number" name="altura" step="0.1" min="20" max="150" inputmode="decimal"
+        value="${ev && ev.heightCm > 0 ? ev.heightCm : ''}"
         placeholder="${ultimaAltura ? num(ultimaAltura.heightCm, 1) : 'ex.: 54,5'}"></label>
     <p class="muted small">Pode preencher só um dos dois.</p>
-    <button class="btn btn-primary block" type="submit">Salvar medida</button>`;
+    <button class="btn btn-primary block" type="submit">Salvar medida</button>
+    ${ev ? '<button class="btn btn-ghost block" type="button" id="medidaDel">Apagar registro</button>' : ''}`;
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -1261,14 +1516,19 @@ function sheetMedida() {
     const altura = Number(form.altura.value);
     if (!at) { toast('Confira a data'); return; }
     if (!(peso > 0) && !(altura > 0)) { toast('Informe o peso ou a altura'); return; }
-    const ev = { type: 'measure', at };
-    if (peso > 0) ev.weightKg = peso;
-    if (altura > 0) ev.heightCm = altura;
-    S.addEvent(ev);
+    // Campo em branco vira null (e não "sem alteração") para dar para corrigir
+    // uma medida que foi lançada com o valor errado.
+    const campos = { at, weightKg: peso > 0 ? peso : null, heightCm: altura > 0 ? altura : null };
+    if (ev) S.updateEvent(ev.id, campos);
+    else S.addEvent({ type: 'measure', ...campos });
     closeSheet();
-    toast('Medida registrada');
+    toast(ev ? 'Medida atualizada' : 'Medida registrada');
   });
-  openSheet('Peso e altura', form);
+  const del = form.querySelector('#medidaDel');
+  if (del) del.addEventListener('click', () => {
+    if (confirm('Apagar esta medida?')) { S.removeEvent(ev.id); closeSheet(); toast('Registro apagado'); }
+  });
+  openSheet(ev ? 'Editar peso e altura' : 'Peso e altura', form);
 }
 
 function textoResumo() {
@@ -1284,7 +1544,9 @@ function textoResumo() {
     '',
   ];
   resumo.eventos.forEach((ev) => {
-    linhas.push(`${fmtTime(ev.at)}  ${tituloEvento(ev)}${subtituloEvento(ev) ? ` — ${subtituloEvento(ev)}` : ''}`);
+    const sub = subtituloEvento(ev);
+    const marca = ev.ongoing ? ' (em andamento)' : '';
+    linhas.push(`${fmtTime(ev.at)}  ${tituloEvento(ev)}${marca}${sub ? ` — ${sub}` : ''}`);
   });
   return linhas.join('\n');
 }
@@ -1759,7 +2021,7 @@ function ligarEventos() {
     if (confirm('Cancelar esta mamada sem registrar?')) S.cancelFeed();
   });
 
-  $('#btnFeedManual').addEventListener('click', sheetMamadaManual);
+  $('#btnFeedManual').addEventListener('click', () => sheetMamada());
   $('#btnSleepManual').addEventListener('click', () => sheetSono());
   $('#btnAddMed').addEventListener('click', () => sheetMed());
 
