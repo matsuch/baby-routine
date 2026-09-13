@@ -312,11 +312,41 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 .wc-bar--sono { --wc-tom: var(--sleep); }
 .wc-bar--xixi { --wc-tom: var(--diaper); }
 .wc-bar--coco { --wc-tom: var(--poo); }
+.wc-meta { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 4 4; opacity: .55; }
+.wc-legenda { margin: 6px 0 0; color: var(--muted); font-size: 11px; font-weight: 700; }
 .wc-day { fill: var(--muted); font-size: 11px; font-weight: 700; text-anchor: middle; }
 .wc-val { fill: var(--muted); font-size: 10px; font-weight: 700; text-anchor: middle; }
 
 /* ---------- resumo do dia (tiles uniformes) ---------- */
 .today-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+/* ---------- evolução: peso, altura e rotina vs. esperado ---------- */
+.measure-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.measure {
+  background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-lg);
+  padding: 14px; display: flex; flex-direction: column; gap: 3px; align-items: flex-start;
+}
+.measure-top { color: var(--muted); font-size: 13px; font-weight: 700; }
+.measure-val { font-size: 26px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.measure-sub { color: var(--muted); font-size: 12px; font-weight: 600; }
+
+.chip-faixa {
+  margin-top: 3px; padding: 3px 9px; border-radius: 999px;
+  font-size: 11px; font-weight: 800; letter-spacing: -0.01em;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--muted);
+}
+.chip-faixa.is-esperado { border-color: color-mix(in oklab, var(--diaper) 40%, var(--line)); color: var(--diaper); }
+.chip-faixa.is-atencao { border-color: color-mix(in oklab, var(--accent) 45%, var(--line)); color: var(--accent); }
+.chip-faixa.is-alerta { border-color: color-mix(in oklab, var(--danger) 45%, var(--line)); color: var(--danger); }
+
+.evo-line {
+  display: flex; align-items: center; gap: 10px; padding: 10px 0;
+  border-top: 1px solid var(--line-soft); font-size: 14px;
+}
+.evo-line:first-of-type { border-top: 0; }
+.evo-line > span:first-child { flex: 1; }
+.evo-line b { font-variant-numeric: tabular-nums; }
+.evo-line .chip-faixa { margin-top: 0; }
+
 .stat {
   background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-md);
   padding: 12px 4px 10px; text-align: center; min-height: 64px;

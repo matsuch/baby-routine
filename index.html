@@ -104,13 +104,10 @@
 
   <!-- ============ EVOLUÇÃO ============ -->
   <section class="view" id="view-evolucao" hidden>
-    <div class="card">
-      <h2>📈 Em construção</h2>
-      <p class="muted small">Aqui vai entrar a comparação do crescimento com o esperado para a idade:
-        peso e altura, tempo de mamada e de sono, xixis e cocôs.</p>
-      <p class="muted small">Peso e altura ainda não são registrados em lugar nenhum do app —
-        é o primeiro passo para esta aba sair do papel.</p>
-    </div>
+    <div class="measure-grid" id="medidaGrid"></div>
+    <button class="btn btn-ghost block" id="btnMedida" type="button">Registrar peso e altura</button>
+    <div id="evolucaoRotina"></div>
+    <p class="muted small center" id="evolucaoNota"></p>
   </section>
 
   <!-- ============ AJUSTES ============ -->
@@ -143,6 +140,14 @@
       <label class="field">
         <span>Data de nascimento</span>
         <input type="date" id="setBirth">
+      </label>
+      <label class="field">
+        <span>Sexo <em class="muted small">— as curvas de crescimento da OMS são separadas por sexo</em></span>
+        <select id="setSex">
+          <option value="">Não informado</option>
+          <option value="female">Menina</option>
+          <option value="male">Menino</option>
+        </select>
       </label>
       <label class="field">
         <span>Intervalo entre mamadas</span>
