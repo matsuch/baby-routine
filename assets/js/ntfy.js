@@ -29,13 +29,16 @@ export function topicUrl(cfg) {
  * `at` (opcional): timestamp em ms para entrega agendada.
  */
 export function buildRequest(cfg, { message, title, tags, priority, at } = {}) {
-  const payload = { message: String(message ?? '') };
+  const topico = String(cfg.topic || '').trim();
+  if (!topico) throw new Error('Defina um tópico do ntfy.');
+  const base = String(cfg.server || 'https://ntfy.sh').replace(/\/+$/, '');
+  const payload = { topic: topico, message: String(message ?? '') };
   if (title) payload.title = title;
   if (tags) payload.tags = Array.isArray(tags) ? tags : String(tags).split(',').map((s) => s.trim());
   if (priority) payload.priority = priority;
   if (at) payload.delay = String(Math.round(at / 1000));
   return {
-    url: topicUrl(cfg),
+    url: base,
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
