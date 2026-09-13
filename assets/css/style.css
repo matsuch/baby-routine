@@ -31,7 +31,10 @@
   --r-lg: 22px;
   --r-md: 16px;
   --r-sm: 12px;
-  --sp: 16px;
+  /* escala do ritmo vertical das telas — só estes três valores separam blocos */
+  --sp-tight: 10px;    /* conteúdo colado a quem o nomeia (título -> bloco) */
+  --sp-block: 16px;    /* padrão entre dois blocos da mesma seção */
+  --sp-section: 26px;  /* respiro que abre uma seção nova */
   --tabbar-h: calc(64px + env(safe-area-inset-bottom));
   --edge: 16px;
   color-scheme: dark;
@@ -87,7 +90,7 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 .icon-btn.is-on { background: var(--accent-soft); border-color: var(--accent); }
 
 /* ---------- herói: timeline circular de 24h ---------- */
-.hero { display: grid; justify-items: center; gap: 18px; margin: 10px 0 18px; }
+.hero { display: grid; justify-items: center; gap: 18px; }
 .hero-ring { width: min(86vw, 340px); height: auto; display: block; overflow: visible; aspect-ratio: 1 / 1; }
 
 /* ACORDADA: a trilha das 24h — escura, discreta, sem cor */
@@ -184,12 +187,27 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 #main { padding: 0 var(--edge); max-width: 620px; margin: 0 auto; }
 .view { animation: fade .22s ease both; }
 @keyframes fade { from { opacity: 0; transform: translateY(6px); } }
-.stack { display: flex; flex-direction: column; gap: 10px; }
+
+/* ---------- ritmo vertical das telas ----------
+ * Nenhum bloco carrega o próprio espaçamento: quem manda é a distância entre
+ * irmãos, sempre a mesma em todas as abas. Assim nada fica colado por falta de
+ * um margin-bottom — e um bloco novo entra na tela já espaçado, sem CSS extra.
+ * Vale só para os filhos diretos da tela; dentro de cards e fichas o
+ * espaçamento é do componente. */
+#main .view > * { margin-bottom: 0; }
+#main .view > * + * { margin-top: var(--sp-block); }
+#main .view > .section-title { margin-top: var(--sp-section); }
+#main .view > .section-title + * { margin-top: var(--sp-tight); }
+#main .view > :first-child { margin-top: var(--sp-tight); }
+/* Container sem nada dentro (ex.: nenhum cartão "agora") não deixa buraco. */
+#main .view > :empty { display: none; }
+
+.stack { display: flex; flex-direction: column; gap: var(--sp-tight); }
 .section-title {
   font-size: 12.5px; text-transform: none; letter-spacing: 0; color: var(--muted);
-  font-weight: 700; margin: 26px 4px 10px;
+  font-weight: 700; margin: 0 4px;
 }
-.row-2 { display: flex; gap: 10px; margin-top: 10px; }
+.row-2 { display: flex; gap: var(--sp-tight); margin-top: var(--sp-tight); }
 .row-2 > * { flex: 1; }
 .center { text-align: center; }
 .muted { color: var(--muted); }
@@ -199,7 +217,9 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
   background: var(--surface); border: 1px solid var(--line-soft);
   border-radius: var(--r-lg); padding: 16px;
 }
-.card + .card { margin-top: 12px; }
+/* .card não tem margem própria: solto numa tela quem espaça é o ritmo da tela;
+ * dentro de uma lista (.stack), o gap dela. Uma margem aqui somaria com o gap e
+ * abriria entre os cards um buraco maior que o das outras listas. */
 
 /* ---------- cartões "próximo" (linhas de ação, altura uniforme) ---------- */
 .next {
@@ -247,7 +267,7 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 .btn-primary:active { filter: brightness(.96); }
 .btn-ghost { background: transparent; }
 .btn-danger { background: transparent; color: var(--danger); border-color: color-mix(in oklab, var(--danger) 40%, var(--line)); }
-.btn.block { display: block; width: 100%; margin-top: 12px; }
+.btn.block { display: block; width: 100%; margin-top: var(--sp-tight); }
 
 /* ---------- registrar rápido (tiles uniformes com chip glossy) ---------- */
 .quick-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
@@ -279,14 +299,14 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 /* ---------- sono ---------- */
 .sono-card .timer { color: var(--sleep); }
 
-.sleepbar { margin-top: 12px; padding: 14px 16px; }
+.sleepbar { padding: 14px 16px; }
 .sleepbar-top { display: flex; align-items: baseline; justify-content: space-between; font-size: 14px; margin-bottom: 9px; font-weight: 700; }
 .sleepbar-top .muted { font-weight: 600; font-size: 12px; }
 .sleepbar-track { height: 9px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
 .sleepbar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #8b83e6, var(--sleep)); transition: width .5s cubic-bezier(.4,0,.2,1); }
 .sleepbar-fill.is-done { background: linear-gradient(90deg, #5fc8a0, var(--diaper)); }
 
-.clock-wrap { display: flex; justify-content: center; margin: 14px 0 8px; }
+.clock-wrap { display: flex; justify-content: center; }
 .clock { width: 240px; max-width: 80%; height: auto; }
 .clock-track { fill: none; stroke: var(--surface-2); stroke-width: 12; }
 .clock-sleep { fill: none; stroke: var(--sleep); stroke-width: 12; stroke-linecap: round; }
@@ -301,7 +321,7 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 .clock-legend .dot.feed { background: var(--accent); }
 
 /* navegação de dia (Diário) */
-.day-nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 14px; }
+.day-nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .day-nav strong { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; }
 .day-nav .icon-btn:disabled { opacity: .35; }
 
@@ -320,7 +340,7 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 /* ---------- resumo do dia (tiles uniformes) ---------- */
 .today-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
 /* ---------- evolução: peso, altura e rotina vs. esperado ---------- */
-.measure-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.measure-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-tight); }
 .measure {
   background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-lg);
   padding: 14px; display: flex; flex-direction: column; gap: 3px; align-items: flex-start;
@@ -420,10 +440,10 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 .med-head-text { min-width: 0; flex: 1; }
 .med-name { font-weight: 800; font-size: 17px; letter-spacing: -0.02em; }
 .med-meta { color: var(--muted); font-size: 13px; font-weight: 600; margin-top: 2px; }
-.med-when { font-size: 14px; font-weight: 700; margin-top: 10px; color: var(--muted); }
+.med-when { font-size: 14px; font-weight: 700; margin-top: var(--sp-tight); color: var(--muted); }
 .med-when.is-due { color: var(--accent); }
 .med-when.is-late { color: var(--late); }
-.med-actions { display: flex; gap: 8px; margin-top: 13px; }
+.med-actions { display: flex; gap: 8px; margin-top: var(--sp-tight); }
 .med-actions .btn { flex: 1; padding: 12px; }
 .med-actions .btn-icon { flex: 0 0 48px; }
 

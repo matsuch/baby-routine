@@ -146,7 +146,9 @@ try {
   });
   await page.fill('#sheetBody input[name="at"]', inicioNovo);
   await page.click('#sheetBody button[type="submit"]');
-  checar((await liveMamada.locator('.item-sub').textContent()).includes('1h30'),
+  // O datetime-local não tem segundos: o início vira "90 min atrás, no minuto
+  // cheio", então a duração exibida cai entre 1h30 e 1h31 conforme o segundo.
+  checar(/1h3[01]/.test(await liveMamada.locator('.item-sub').textContent()),
     `mudar o início deveria esticar a duração em andamento: "${await liveMamada.locator('.item-sub').textContent()}"`);
   const feedSalvo = await page.evaluate(() => JSON.parse(localStorage.getItem('rotina-bebe:v1')).activeFeed);
   checar(Date.now() - feedSalvo.startAt > 80 * 60000, 'o novo início da mamada não persistiu');
@@ -325,6 +327,32 @@ try {
   const syncBk = await page.evaluate(() => JSON.parse(localStorage.getItem('rotina-bebe:sync')));
   checar(syncBk.enabled === true && syncBk.familyCode === codigo, 'config de sync não persistiu');
   await page.uncheck('#syncEnabled'); // desliga para não interferir no teste de persistência
+
+  // espaçamento padronizado: os blocos de cada tela seguem a mesma escala
+  // (10px colado a um título, 16px entre blocos, 26px abrindo uma seção) — e
+  // nenhum encosta no seguinte, como acontecia com a lista de registros.
+  const ESCALA = [10, 16, 26];
+  const espacos = () => page.evaluate(() => {
+    const tela = document.querySelector('#main .view:not([hidden])');
+    const blocos = [...tela.children].filter((b) => b.getBoundingClientRect().height > 0);
+    const medidas = [];
+    for (let i = 1; i < blocos.length; i += 1) {
+      const a = blocos[i - 1].getBoundingClientRect();
+      const b = blocos[i].getBoundingClientRect();
+      medidas.push({ bloco: blocos[i].id || blocos[i].className || blocos[i].tagName, gap: Math.round(b.top - a.bottom) });
+    }
+    return medidas;
+  });
+  for (const aba of ['agora', 'remedios', 'diario', 'evolucao']) {
+    await page.click(`.tab[data-view="${aba}"]`);
+    await page.waitForTimeout(350); // deixa a animação de entrada da view terminar
+    const medidas = await espacos();
+    checar(medidas.length > 0, `não consegui medir o espaçamento da aba ${aba}`);
+    const fora = medidas.filter((m) => !ESCALA.some((v) => Math.abs(m.gap - v) <= 1));
+    checar(fora.length === 0,
+      `aba ${aba} tem espaçamento fora do padrão: ${fora.map((m) => `${m.bloco}=${m.gap}px`).join(', ')}`);
+  }
+  await page.click('.tab[data-view="agora"]');
 
   // persistência e service worker
   const antes = await page.evaluate(() => JSON.parse(localStorage.getItem('rotina-bebe:v1')).events.length);
