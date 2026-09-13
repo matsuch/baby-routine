@@ -5,6 +5,7 @@ import {
   countdown, describeFeed, fmtAge, fmtDate, fmtDateTime, fmtGap, fmtMin, fmtTime,
   fromLocalInput, pad, SIDE_LABEL, toLocalInput,
 } from './format.js';
+import * as CRESC from './crescimento.js';
 import * as WA from './wa.js';
 import * as NTFY from './ntfy.js';
 import * as SYNC from './sync.js';
@@ -1039,6 +1040,7 @@ const CHARTS_7D = {
     rotulo: (v) => `${Math.round(v)}h`,
     media: (v) => fmtMin(v * 60),
     descricao: (v) => fmtMin(v * 60),
+    ref: () => S.recommendedSleepH(),
   },
   xixi: {
     titulo: '💧 Xixis',
@@ -1048,6 +1050,7 @@ const CHARTS_7D = {
     rotulo: (v) => String(v),
     media: (v) => v.toFixed(1).replace('.', ','),
     descricao: (v) => `${v} xixi${v === 1 ? '' : 's'}`,
+    ref: (dias) => CRESC.refXixi(dias),
   },
   coco: {
     titulo: '💩 Cocôs',
@@ -1057,6 +1060,7 @@ const CHARTS_7D = {
     rotulo: (v) => String(v),
     media: (v) => v.toFixed(1).replace('.', ','),
     descricao: (v) => `${v} cocô${v === 1 ? '' : 's'}`,
+    ref: (dias) => CRESC.refCoco(dias),
   },
 };
 
@@ -1074,13 +1078,23 @@ function renderChart7d(container, spec) {
   const valores = dias.map((d) => spec.ler(S.daySummary(d)));
   const comDados = valores.filter((v) => v > 0).length;
   const media = comDados ? valores.reduce((t, v) => t + v, 0) / comDados : 0;
-  const max = Math.max(spec.piso, ...valores);
+  // Sem data de nascimento não há idade, e sem idade não há referência honesta.
+  const idade = S.ageDays();
+  const ref = idade == null ? null : spec.ref(idade);
+  const alvos = ref ? [ref.min, ref.max].filter((v) => v > 0) : [];
+  const max = Math.max(spec.piso, ...valores, ...alvos);
 
   const card = el('div', 'card');
   const topo = el('div', 'sleepbar-top');
   topo.append(el('span', null, spec.titulo),
     el('strong', null, `média ${media ? spec.media(media) : '—'}`));
   card.append(topo);
+  // A legenda da meta fica aqui, não no SVG: dentro do gráfico ela colide
+  // com o rótulo do dia mais alto.
+  if (alvos.length) {
+    const alvo = ref.max ? `${spec.rotulo(ref.min)}–${spec.rotulo(ref.max)}` : `mín. ${spec.rotulo(ref.min)}`;
+    card.append(el('p', 'wc-legenda', `- - -  esperado para a idade: ${alvo}`));
+  }
 
   const NS = 'http://www.w3.org/2000/svg';
   const W = 320; const H = 120; const base = 96; const bw = 26; const gap = (W - bw * 7) / 8;
@@ -1094,6 +1108,12 @@ function renderChart7d(container, spec) {
     svg.append(e);
     return e;
   };
+  // Linha de meta primeiro, para as barras passarem por cima dela.
+  const y = (v) => base - Math.round((v / max) * (base - 12));
+  alvos.forEach((alvo) => {
+    add('line', { x1: 2, x2: W - 2, y1: y(alvo), y2: y(alvo), class: 'wc-meta' });
+  });
+
   dias.forEach((d, i) => {
     const x = gap + i * (bw + gap);
     const h = Math.round((valores[i] / max) * (base - 12));
@@ -1115,6 +1135,140 @@ function renderChart7d(container, spec) {
   });
   card.append(svg);
   container.append(card);
+}
+
+/* ================================================================ EVOLUÇÃO */
+
+const MEDIDAS = [
+  // casas: o valor medido (a balança dá gramas); faixa: a curva, onde 1 casa basta.
+  { campo: 'weightKg', ind: 'peso', emoji: '⚖️', rotulo: 'Peso', unidade: 'kg', casas: 2, faixa: 1 },
+  { campo: 'heightCm', ind: 'altura', emoji: '📏', rotulo: 'Altura', unidade: 'cm', casas: 1, faixa: 1 },
+];
+
+const FAIXA_TEXTO = {
+  esperado: 'dentro do esperado',
+  atencao: 'fora da faixa usual',
+  alerta: 'bem fora da faixa usual',
+};
+
+const num = (v, casas = 1) => v.toLocaleString('pt-BR', { maximumFractionDigits: casas });
+
+function renderEvolucao() {
+  const { sex, birth } = state.baby;
+  const grid = $('#medidaGrid');
+  grid.innerHTML = '';
+
+  MEDIDAS.forEach((m) => {
+    const ev = S.ultimaMedida(m.campo);
+    const card = el('div', 'measure');
+    card.append(el('span', 'measure-top', `${m.emoji} ${m.rotulo}`));
+    if (!ev) {
+      card.append(el('b', 'measure-val', '—'), el('span', 'measure-sub', 'sem registro'));
+      grid.append(card);
+      return;
+    }
+    card.append(el('b', 'measure-val', `${num(ev[m.campo], m.casas)}${m.unidade}`));
+    card.append(el('span', 'measure-sub', fmtDate(ev.at)));
+
+    // A curva compara na idade que ela tinha no dia da medição, não hoje.
+    const r = CRESC.avaliar(m.ind, ev[m.campo], sex, S.ageDays(ev.at));
+    if (r) {
+      card.append(el('span', `chip-faixa is-${r.faixa}`, `P${Math.round(r.percentil)} · ${FAIXA_TEXTO[r.faixa]}`));
+      card.append(el('span', 'measure-sub', `esperado ${num(r.p3, m.faixa)}–${num(r.p97, m.faixa)}${m.unidade}`));
+    }
+    grid.append(card);
+  });
+
+  // Sem sexo ou sem nascimento não existe curva — diga qual falta, não some.
+  const falta = [];
+  if (!birth) falta.push('a data de nascimento');
+  if (!sex) falta.push('o sexo');
+  $('#evolucaoNota').textContent = falta.length
+    ? `Informe ${falta.join(' e ')} nos Ajustes (⚙️) para comparar com as curvas da OMS.`
+    : 'Curvas de crescimento da OMS e referências gerais por idade — não é conselho médico.';
+
+  renderEvolucaoRotina($('#evolucaoRotina'));
+}
+
+/** Como a rotina dos últimos 7 dias se compara com o esperado para a idade. */
+function renderEvolucaoRotina(container) {
+  container.innerHTML = '';
+  const dias = S.ageDays();
+  if (dias == null) return;
+
+  const media = (ler) => {
+    let total = 0;
+    for (let i = 6; i >= 0; i -= 1) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      total += ler(S.daySummary(d));
+    }
+    return total / 7;
+  };
+
+  const sono = S.recommendedSleepH();
+  const linhas = [
+    ['💧', 'Xixis por dia', media((r) => r.xixis), CRESC.refXixi(dias), (v) => num(v, 1)],
+    ['💩', 'Cocôs por dia', media((r) => r.cocos), CRESC.refCoco(dias), (v) => num(v, 1)],
+    ['😴', 'Sono por dia', media((r) => r.minutosDormindo) / 60,
+      sono ? { min: sono.min, max: sono.max } : null, (v) => fmtMin(v * 60)],
+  ];
+
+  const card = el('div', 'card');
+  card.append(el('div', 'sleepbar-top', '<span>Rotina · média dos últimos 7 dias</span>'));
+  let semMeta = false;
+  linhas.forEach(([emoji, rotulo, valor, ref, fmt]) => {
+    const linha = el('div', 'evo-line');
+    linha.append(el('span', null, `${emoji} ${rotulo}`));
+    linha.append(el('b', null, fmt(valor)));
+    if (!ref) {
+      linha.append(el('span', 'chip-faixa', 'sem meta'));
+      semMeta = true;
+    } else {
+      const alvo = ref.max ? `${fmt(ref.min)}–${fmt(ref.max)}` : `mín. ${fmt(ref.min)}`;
+      const ok = valor >= ref.min - 0.05 && (!ref.max || valor <= ref.max + 0.05);
+      linha.append(el('span', `chip-faixa is-${ok ? 'esperado' : 'atencao'}`, alvo));
+    }
+    card.append(linha);
+  });
+  if (semMeta) {
+    card.append(el('p', 'muted small', 'Depois das primeiras semanas, a frequência de cocô '
+      + 'varia demais entre bebês saudáveis para virar meta.'));
+  }
+  container.append(card);
+}
+
+function sheetMedida() {
+  const form = el('form');
+  const ultimoPeso = S.ultimaMedida('weightKg');
+  const ultimaAltura = S.ultimaMedida('heightCm');
+  form.innerHTML = `
+    <label class="field"><span>Quando</span>
+      <input type="datetime-local" name="at" value="${toLocalInput(Date.now())}" required></label>
+    <label class="field"><span>Peso (kg)</span>
+      <input type="number" name="peso" step="0.005" min="0.5" max="40" inputmode="decimal"
+        placeholder="${ultimoPeso ? num(ultimoPeso.weightKg, 3) : 'ex.: 4,25'}"></label>
+    <label class="field"><span>Altura (cm)</span>
+      <input type="number" name="altura" step="0.1" min="20" max="150" inputmode="decimal"
+        placeholder="${ultimaAltura ? num(ultimaAltura.heightCm, 1) : 'ex.: 54,5'}"></label>
+    <p class="muted small">Pode preencher só um dos dois.</p>
+    <button class="btn btn-primary block" type="submit">Salvar medida</button>`;
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const at = fromLocalInput(form.at.value);
+    const peso = Number(form.peso.value);
+    const altura = Number(form.altura.value);
+    if (!at) { toast('Confira a data'); return; }
+    if (!(peso > 0) && !(altura > 0)) { toast('Informe o peso ou a altura'); return; }
+    const ev = { type: 'measure', at };
+    if (peso > 0) ev.weightKg = peso;
+    if (altura > 0) ev.heightCm = altura;
+    S.addEvent(ev);
+    closeSheet();
+    toast('Medida registrada');
+  });
+  openSheet('Peso e altura', form);
 }
 
 function textoResumo() {
@@ -1171,6 +1325,7 @@ function setVal(sel, val) {
 function renderAjustes() {
   setVal('#setName', state.baby.name || '');
   setVal('#setBirth', state.baby.birth || '');
+  setVal('#setSex', state.baby.sex || '');
   $('#setInterval').value = String(state.settings.feedIntervalMin);
   $('#setNotify').checked = !!state.settings.notify && Notification.permission === 'granted';
   const totalRegistros = state.events.filter((e) => !e.deleted).length;
@@ -1344,6 +1499,7 @@ function render() {
   else if (viewAtual === 'mamada') renderMamada();
   else if (viewAtual === 'remedios') renderRemedios();
   else if (viewAtual === 'diario') renderDiario();
+  else if (viewAtual === 'evolucao') renderEvolucao();
   else if (viewAtual === 'ajustes') renderAjustes();
 }
 
@@ -1618,6 +1774,8 @@ function ligarEventos() {
 
   $('#setName').addEventListener('input', (e) => { state.baby.name = e.target.value; S.save(); });
   $('#setBirth').addEventListener('change', (e) => { state.baby.birth = e.target.value; S.save(); });
+  $('#setSex').addEventListener('change', (e) => { state.baby.sex = e.target.value; S.save(); });
+  $('#btnMedida').addEventListener('click', () => sheetMedida());
   $('#setInterval').addEventListener('change', (e) => {
     state.settings.feedIntervalMin = Number(e.target.value);
     S.save();

@@ -24,7 +24,9 @@ export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().to
 function estadoInicial() {
   return {
     version: 1,
-    baby: { name: '', birth: '' },
+    // sex ('female' | 'male') é obrigatório para as curvas da OMS, que são
+    // publicadas separadamente por sexo; vazio = ainda não informado.
+    baby: { name: '', birth: '', sex: '' },
     settings: {
       feedIntervalMin: 180,
       notify: false,
@@ -382,6 +384,26 @@ export function removeMed(id) {
     }
   });
   save();
+}
+
+/* ------------------------------------------------------------------ medidas */
+
+/**
+ * Peso (kg) e altura (cm) são eventos como qualquer outro — o que interessa
+ * é a série ao longo do tempo, não só o último valor. Cada medição pode
+ * trazer só um dos dois (a balança de casa não mede altura).
+ */
+export function medidas() {
+  return state.events.filter((e) => e.type === 'measure' && !e.deleted);
+}
+
+/** Última medição que trouxe este campo ('weightKg' | 'heightCm'). */
+export function ultimaMedida(campo) {
+  const lista = medidas();
+  for (let i = lista.length - 1; i >= 0; i -= 1) {
+    if (lista[i][campo] > 0) return lista[i];
+  }
+  return null;
 }
 
 /* ------------------------------------------------------------------ resumo */
