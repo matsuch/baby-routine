@@ -89,6 +89,7 @@ export const SIDE_LABEL = { E: 'esquerdo', D: 'direito' };
 export function describeFeed(ev) {
   const partes = [];
   if (ev.durationMin) partes.push(fmtMin(ev.durationMin));
+  if (ev.bottle) partes.push('mamadeira');
   const lados = Object.entries(ev.sides || {})
     .filter(([, min]) => min > 0)
     .map(([side, min]) => `${SIDE_LABEL[side] || side} ${min}min`);

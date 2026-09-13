@@ -222,6 +222,11 @@ export function toggleSleep() {
   return null;
 }
 
+export function cancelSleep() {
+  state.activeSleep = null;
+  save();
+}
+
 /* ------------------------------------------------------------------ arroto */
 export function startBurp() {
   if (state.activeBurp) return;
@@ -246,6 +251,86 @@ export function finishBurp() {
 export function cancelBurp() {
   state.activeBurp = null;
   save();
+}
+
+/* ------------------------------------------------------------------ em andamento
+ * Os cronômetros (mamada, sono e arroto) só viram evento de verdade quando
+ * encerram — mas aparecem na lista de registros e nas contagens do dia desde
+ * que começam, como eventos VIRTUAIS marcados com `ongoing`. Assim a Home
+ * mostra o que está acontecendo agora sem inventar um registro pela metade
+ * no histórico (e sem mandar meia-mamada para a sincronização).
+ */
+
+/** Ids fixos dos registros em andamento (não existem no histórico). */
+export const ONGOING_ID = {
+  feed: 'andamento-mamada',
+  sleep: 'andamento-sono',
+  burp: 'andamento-arroto',
+};
+
+/** Minutos por lado da mamada em andamento, contando o lado atual até agora. */
+function ladosAtivos(f, agora) {
+  const porLado = {};
+  (f.segments || []).forEach((s) => { porLado[s.side] = (porLado[s.side] || 0) + s.ms; });
+  if (f.segStart) porLado[f.side] = (porLado[f.side] || 0) + Math.max(0, agora - f.segStart);
+  return Object.fromEntries(Object.entries(porLado).map(([lado, ms]) => [lado, Math.round(ms / MS_MIN)]));
+}
+
+/** Os cronômetros em andamento como eventos virtuais (mesma forma dos salvos). */
+export function ongoingEvents(agora = Date.now()) {
+  const lista = [];
+  const f = state.activeFeed;
+  if (f) {
+    lista.push({
+      id: ONGOING_ID.feed, type: 'feed', ongoing: 'feed', at: f.startAt, endAt: null,
+      durationMin: Math.round(Math.max(0, agora - f.startAt) / MS_MIN),
+      sides: ladosAtivos(f, agora), lastSide: f.side,
+    });
+  }
+  if (state.activeSleep) {
+    lista.push({ id: ONGOING_ID.sleep, type: 'sleep', ongoing: 'sleep', at: state.activeSleep.startAt, endAt: null });
+  }
+  if (state.activeBurp) {
+    lista.push({
+      id: ONGOING_ID.burp, type: 'burp', ongoing: 'burp', at: state.activeBurp.startAt, endAt: null,
+      durationMin: Math.round(Math.max(0, agora - state.activeBurp.startAt) / MS_MIN),
+    });
+  }
+  return lista.sort((a, b) => a.at - b.at);
+}
+
+/**
+ * Muda o início de um cronômetro em andamento — a única coisa editável antes de
+ * encerrar. Início no futuro não existe, então fica preso em "agora". Na mamada,
+ * o tempo que entra (ou sai) vai para o lado que estava mamando naquele trecho,
+ * para os minutos por lado continuarem fechando com a duração total.
+ */
+export function setOngoingStart(tipo, at) {
+  if (!Number.isFinite(at)) return null;
+  const agora = Date.now();
+  const inicio = Math.min(at, agora);
+  if (tipo === 'sleep' && state.activeSleep) {
+    state.activeSleep.startAt = inicio;
+  } else if (tipo === 'burp' && state.activeBurp) {
+    state.activeBurp.startAt = inicio;
+  } else if (tipo === 'feed' && state.activeFeed) {
+    const f = state.activeFeed;
+    const delta = inicio - f.startAt; // > 0 = começou mais tarde, ou seja, menos tempo
+    f.startAt = inicio;
+    if (f.segments && f.segments.length) f.segments[0].ms = Math.max(0, f.segments[0].ms - delta);
+    else f.segStart = Math.min(Math.max(inicio, (f.segStart || inicio) + delta), agora);
+  } else {
+    return null;
+  }
+  save();
+  return inicio;
+}
+
+/** Descarta um cronômetro em andamento sem registrar nada. */
+export function cancelOngoing(tipo) {
+  if (tipo === 'feed') cancelFeed();
+  else if (tipo === 'sleep') cancelSleep();
+  else if (tipo === 'burp') cancelBurp();
 }
 
 /* ------------------------------------------------------------------ sono: janelas e recomendações
@@ -419,9 +504,10 @@ export function dayBounds(ref = new Date()) {
  * Sono que cai DENTRO de um dia, recortado nos limites [inicio, fim).
  * Um sono que cruza a meia-noite entra parcial em cada dia (a parte que
  * pertence àquele dia), em vez de contar tudo no dia em que começou.
- * Retorna segmentos { at, endAt, id } já recortados, ordenados.
+ * Retorna segmentos { at, endAt, id } já recortados, ordenados. A soneca em
+ * andamento entra recortada em `agora` e marcada com `ongoing`.
  */
-export function sleepSegmentsInDay(ref = new Date()) {
+export function sleepSegmentsInDay(ref = new Date(), agora = Date.now()) {
   const [inicio, fim] = dayBounds(ref);
   const segs = [];
   for (const e of state.events) {
@@ -430,18 +516,27 @@ export function sleepSegmentsInDay(ref = new Date()) {
     const f = Math.min(e.endAt, fim);
     if (f > ini) segs.push({ at: ini, endAt: f, id: e.id });
   }
+  // Soneca em andamento: conta até agora, para o total do dia subir junto.
+  if (state.activeSleep) {
+    const ini = Math.max(state.activeSleep.startAt, inicio);
+    const f = Math.min(agora, fim);
+    if (f > ini) segs.push({ at: ini, endAt: f, id: ONGOING_ID.sleep, ongoing: 'sleep' });
+  }
   return segs.sort((a, b) => a.at - b.at);
 }
 
-/** Minutos de sono do dia (já recortados na meia-noite). */
-export function sleepMinutesInDay(ref = new Date()) {
-  const ms = sleepSegmentsInDay(ref).reduce((t, s) => t + (s.endAt - s.at), 0);
+/** Minutos de sono do dia (já recortados na meia-noite, incluindo a soneca em curso). */
+export function sleepMinutesInDay(ref = new Date(), agora = Date.now()) {
+  const ms = sleepSegmentsInDay(ref, agora).reduce((t, s) => t + (s.endAt - s.at), 0);
   return Math.round(ms / MS_MIN);
 }
 
 export function daySummary(ref = new Date()) {
   const [inicio, fim] = dayBounds(ref);
-  const eventos = eventsBetween(inicio, fim);
+  // Os cronômetros em andamento entram no dia em que começaram: aparecem na
+  // lista e já contam nos números, que vão se ajustando até eles encerrarem.
+  const eventos = [...eventsBetween(inicio, fim), ...ongoingEvents().filter((e) => e.at >= inicio && e.at < fim)]
+    .sort((a, b) => a.at - b.at);
   const feeds = eventos.filter((e) => e.type === 'feed');
   const fraldas = eventos.filter((e) => e.type === 'diaper');
   return {

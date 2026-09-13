@@ -112,6 +112,62 @@ try {
   checar((await page.locator('#todayGrid .stat').allTextContents()).some((t) => t.includes('arrotos')),
     'resumo do dia não mostra arrotos');
 
+  // registros EM ANDAMENTO: entram na lista da Home antes de encerrar, já contam
+  // no resumo do dia, marcam "em andamento" e só deixam mudar o início.
+  const mamadasHoje = async () => Number((await page.textContent('#todayGrid .stat b')).trim());
+  const mamadasAntes = await mamadasHoje();
+  await page.click('.quick[data-quick="sono"]');   // sono em andamento
+  await page.click('.quick[data-quick="mamada"]'); // mamada em andamento (abre a aba Mamada)
+  await page.click('.tab[data-view="agora"]');
+  const emAndamento = page.locator('#timeline .item.is-live');
+  const liveMamada = emAndamento.filter({ hasText: 'Mamada' });
+  const liveSono = emAndamento.filter({ hasText: 'Sono' });
+  checar(await emAndamento.count() === 2,
+    `mamada e sono em andamento deveriam estar na lista de registros (achei ${await emAndamento.count()})`);
+  checar(await liveMamada.count() === 1 && await liveSono.count() === 1,
+    'faltou a mamada ou o sono em andamento na lista');
+  checar((await liveMamada.locator('.live-pill').textContent()).includes('em andamento'),
+    'registro em andamento sem a marca "em andamento"');
+  checar(await mamadasHoje() === mamadasAntes + 1,
+    'a contagem de mamadas do dia não subiu com a mamada em andamento');
+  checar(await page.locator('#timeline .item .item-edit').count() === await page.locator('#timeline .item').count(),
+    'todo registro da lista deveria ter o lápis de editar');
+
+  // ficha do em andamento: só o início (sem duração, sem hora de fim)
+  await liveMamada.locator('.item-edit').click();
+  checar(await page.locator('#sheetBody input[name="at"]').count() === 1,
+    'ficha do registro em andamento deveria pedir o início');
+  checar(await page.locator('#sheetBody input[name="min"], #sheetBody input[name="end"]').count() === 0,
+    'em andamento não deveria deixar mudar duração nem hora de fim');
+  const inicioNovo = await page.evaluate(() => {
+    const d = new Date(Date.now() - 90 * 60000);
+    const p2 = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T${p2(d.getHours())}:${p2(d.getMinutes())}`;
+  });
+  await page.fill('#sheetBody input[name="at"]', inicioNovo);
+  await page.click('#sheetBody button[type="submit"]');
+  checar((await liveMamada.locator('.item-sub').textContent()).includes('1h30'),
+    `mudar o início deveria esticar a duração em andamento: "${await liveMamada.locator('.item-sub').textContent()}"`);
+  const feedSalvo = await page.evaluate(() => JSON.parse(localStorage.getItem('rotina-bebe:v1')).activeFeed);
+  checar(Date.now() - feedSalvo.startAt > 80 * 60000, 'o novo início da mamada não persistiu');
+  await shot('andamento.png');
+
+  // registro concluído também é editável (fralda: horário + o que tinha)
+  await page.locator('#timeline .item').filter({ hasText: 'Fralda' }).first().locator('.item-edit').click();
+  checar(await page.locator('#sheetBody select[name="kind"]').count() === 1,
+    'fralda deveria abrir a ficha de edição');
+  await page.click('#sheetBody button[type="submit"]');
+  checar(await page.locator('#sheetBackdrop').isHidden(), 'a ficha da fralda não fechou ao salvar');
+
+  // o ✕ de um registro em andamento cancela o cronômetro (não vai pro histórico)
+  page.once('dialog', (d) => d.accept());
+  await liveMamada.locator('.item-del').click();
+  await page.waitForFunction(() => !JSON.parse(localStorage.getItem('rotina-bebe:v1')).activeFeed, { timeout: 4000 });
+  checar(await liveMamada.count() === 0, 'a mamada cancelada continuou na lista');
+  checar(await mamadasHoje() === mamadasAntes, 'a contagem do dia não voltou depois de cancelar');
+  await page.click('.quick[data-quick="sono"]'); // encerra o sono em andamento
+  checar(await emAndamento.count() === 0, 'não deveria sobrar registro em andamento');
+
   // remédios
   await page.click('.tab[data-view="remedios"]');
   const doses = page.locator('.med .btn-primary');
