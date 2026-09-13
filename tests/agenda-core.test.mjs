@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert';
 import {
-  nextFeedAt, dueAlertAt, dueReminders, localTimeToday, MS_MIN, MS_HOUR,
+  nextFeedAt, dueAlertAt, dueReminders, localTimeToday, normalizeMed, MS_MIN, MS_HOUR,
 } from '../lib/agenda-core.mjs';
 
 let falhas = 0;
@@ -97,6 +97,36 @@ teste('dueReminders: janela maxLate ignora avisos muito antigos', () => {
   const evs = [{ type: 'feed', at: now - 6 * MS_HOUR, endAt: now - 5 * MS_HOUR }];
   const r = dueReminders(perfilBase(), evs, { now });
   assert.ok(!r.some((x) => x.kind === 'feed'), 'aviso velho demais não deve entrar');
+});
+
+teste('normalizeMed: converte formato legado (intervalHours) para repeat + startAt', () => {
+  const legado = { id: 'med-x', name: 'Cefalexina', active: true, intervalHours: 6 };
+  const eventos = [{ type: 'med', medId: 'med-x', at: 5 * MS_HOUR, deleted: false }];
+  normalizeMed(legado, eventos);
+  assert.deepStrictEqual(legado.repeat, { every: 6, unit: 'hour' });
+  assert.equal(legado.startAt, 5 * MS_HOUR, 'startAt deve ser ancorado na última dose');
+  assert.equal(legado.category, 'remedio', 'category padrão é remedio');
+});
+
+teste('normalizeMed: sem eventos, startAt fica null (não inventa horário)', () => {
+  const legado = { id: 'med-y', name: 'Profenid', active: true, intervalHours: 12 };
+  normalizeMed(legado, []);
+  assert.deepStrictEqual(legado.repeat, { every: 12, unit: 'hour' });
+  assert.equal(legado.startAt, null);
+});
+
+teste('dueReminders: med no formato legado (intervalHours) dispara corretamente', () => {
+  const now = 11 * MS_HOUR;
+  const perfil = {
+    baby: { name: 'Teresa' },
+    settings: { feedIntervalMin: 180, ntfy: { enabled: true, topic: 't' } },
+    meds: [{ id: 'med-cefa', name: 'Cefalexina', active: true, intervalHours: 6 }],
+  };
+  const evs = [{ type: 'med', medId: 'med-cefa', at: 5 * MS_HOUR, deleted: false }];
+  const r = dueReminders(perfil, evs, { now });
+  const med = r.find((x) => x.kind === 'med');
+  assert.ok(med, 'deveria disparar o remédio no formato legado');
+  assert.match(med.message, /Cefalexina/);
 });
 
 teste('dueReminders: sem diaperTimes não lembra de troca', () => {
