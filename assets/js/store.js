@@ -76,6 +76,10 @@ function migrar(dados) {
   s.events = Array.isArray(dados.events) ? dados.events : [];
   // Normaliza alertas antigos: categoria, recorrência e data/hora âncora.
   s.meds.forEach((m) => {
+    // Alertas criados antes da correção do saveMed vieram sem id. Batiza aqui
+    // (antes da busca por doses abaixo, que senão casaria medId undefined com
+    // qualquer evento sem remédio).
+    if (!m.id) m.id = uid();
     if (!m.category) m.category = 'remedio';
     if (m.repeat === undefined) {
       m.repeat = m.intervalHours ? { every: m.intervalHours, unit: 'hour' } : { every: 8, unit: 'hour' };
@@ -453,7 +457,9 @@ export function saveMed(dados) {
     const med = state.meds.find((m) => m.id === dados.id);
     if (med) Object.assign(med, dados);
   } else {
-    state.meds.push({ id: uid(), active: true, ...dados });
+    // `id` fica por último: o formulário manda `id: undefined` ao criar, e um
+    // spread depois do uid() apagava o id — o alerta nascia sem identidade.
+    state.meds.push({ active: true, ...dados, id: uid() });
   }
   save();
 }
