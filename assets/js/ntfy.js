@@ -17,11 +17,16 @@ export function sugerirTopico() {
   return `rotina-bebe-${aleatorio}`;
 }
 
-export function topicUrl(cfg) {
-  const base = String(cfg.server || 'https://ntfy.sh').replace(/\/+$/, '');
-  const topico = String(cfg.topic || '').trim();
-  if (!topico) throw new Error('Defina um tópico do ntfy.');
-  return `${base}/${encodeURIComponent(topico)}`;
+const PRIORIDADES = { min: 1, low: 2, default: 3, high: 4, max: 5, urgent: 5 };
+
+/**
+ * No modo JSON o ntfy exige `priority` como número de 1 a 5 — mandar o nome
+ * ("high") faz o corpo inteiro ser rejeitado com HTTP 400 e o aviso não sai.
+ * (Só os headers X-Priority aceitam o nome.)
+ */
+function prioridadeNumero(p) {
+  const n = typeof p === 'number' ? p : PRIORIDADES[String(p).trim().toLowerCase()];
+  return Number.isInteger(n) && n >= 1 && n <= 5 ? n : 3;
 }
 
 /**
@@ -35,7 +40,7 @@ export function buildRequest(cfg, { message, title, tags, priority, at } = {}) {
   const payload = { topic: topico, message: String(message ?? '') };
   if (title) payload.title = title;
   if (tags) payload.tags = Array.isArray(tags) ? tags : String(tags).split(',').map((s) => s.trim());
-  if (priority) payload.priority = priority;
+  if (priority) payload.priority = prioridadeNumero(priority);
   if (at) payload.delay = String(Math.round(at / 1000));
   return {
     url: base,

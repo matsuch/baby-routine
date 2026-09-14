@@ -189,6 +189,10 @@ try {
     'categoria (emoji) não apareceu no card do alerta');
   checar((await page.locator('.med-meta').allTextContents()).some((t) => t.includes('uma vez')),
     'alerta de data marcada deveria mostrar "uma vez"');
+  // Sem `id` o alerta não dedupa o push, não liga as doses e não dá pra editar.
+  const medsSemId = await page.evaluate(() =>
+    (JSON.parse(localStorage.getItem('rotina-bebe:v1')) || {}).meds.filter((m) => !m.id).map((m) => m.name));
+  checar(medsSemId.length === 0, `alerta salvo sem id: ${medsSemId.join(', ')}`);
   await shot('remedios.png');
 
   // agenda projetada e linha do tempo — vivem na Home
@@ -293,8 +297,15 @@ try {
   await page.click('#ntfyTest');
   await page.waitForFunction(() => window.__ntfy && window.__ntfy.length > 0, { timeout: 4000 });
   const push = await page.evaluate(() => window.__ntfy[0]);
-  checar(push.url === `https://ntfy.sh/${topicoGerado}`, `URL do ntfy errada: ${push.url}`);
-  checar(typeof push.body === 'string' && push.body.includes('Teste'), 'corpo do push errado');
+  // Modo JSON do ntfy: vai na URL BASE com o tópico no corpo. Postar em
+  // /<tópico> faz o ntfy mostrar o JSON cru como texto da notificação.
+  checar(push.url === 'https://ntfy.sh', `URL do ntfy errada: ${push.url}`);
+  const corpoPush = JSON.parse(push.body);
+  checar(corpoPush.topic === topicoGerado, `tópico não foi no corpo: ${push.body}`);
+  checar(String(corpoPush.message).includes('Teste'), 'corpo do push errado');
+  // Prioridade precisa ser número: o nome ("high") faz o ntfy devolver 400.
+  checar(corpoPush.priority === undefined || typeof corpoPush.priority === 'number',
+    `prioridade precisa ser número, veio ${JSON.stringify(corpoPush.priority)}`);
   // horários fixos de troca: são lidos e normalizados no perfil (que sincroniza
   // pro servidor, onde o /api/cron os usa para lembrar de anotar as trocas).
   await page.fill('#ntfyDiaper', '8h, 14:00, 22:30');

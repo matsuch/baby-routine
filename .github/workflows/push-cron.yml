@@ -10,8 +10,14 @@
 # Opcional:
 #   PUSH_CRON_URL     — se o domínio da Vercel mudar (padrão abaixo)
 #
-# Obs.: o GitHub pode atrasar/agrupar os disparos agendados, e desliga o cron
-# após ~60 dias sem atividade no repositório — reative em Actions se isso ocorrer.
+# Obs.: o GitHub atrasa MUITO os disparos agendados (medimos intervalos de 2 a
+# 7 horas com `*/10`), e desliga o cron após ~60 dias sem atividade — reative em
+# Actions se isso ocorrer. Por isso cada execução fica ~50 min pingando de 5 em
+# 5 min, em vez de bater uma vez só e sair.
+#
+# Para cadência de verdade (a cada 5 min, sem depender do humor do GitHub),
+# aponte um pinger externo gratuito — ex.: cron-job.org — para a mesma URL,
+# com o header Authorization: Bearer <PUSH_CRON_SECRET>.
 name: Avisos automáticos (cron)
 
 on:
@@ -26,6 +32,7 @@ concurrency:
 jobs:
   ping:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - name: Disparar /api/cron na Vercel
         env:
@@ -33,9 +40,17 @@ jobs:
           CRON_SECRET: ${{ secrets.PUSH_CRON_SECRET }}
         run: |
           URL="${CRON_URL:-https://baby-routine-three.vercel.app/api/cron}"
-          code=$(curl -sS -m 30 -o /tmp/cron_out -w '%{http_code}' \
-            -H "Authorization: Bearer ${CRON_SECRET}" "$URL" || echo 000)
-          echo "HTTP $code"
-          cat /tmp/cron_out 2>/dev/null || true
-          echo
-          test "$code" = "200"
+          ok=0; erro=0
+          # 11 pings de 5 em 5 min (~50 min). O GitHub costuma atrasar o
+          # agendamento em horas; cobrindo uma janela contínua, os lembretes
+          # caem dentro dos 90 min de tolerância do agenda-core em vez de
+          # serem perdidos entre uma execução e outra.
+          for i in $(seq 0 10); do
+            [ "$i" -gt 0 ] && sleep 300
+            code=$(curl -sS -m 30 -o /tmp/cron_out -w '%{http_code}' \
+              -H "Authorization: Bearer ${CRON_SECRET}" "$URL" || echo 000)
+            echo "[$(date -u +%H:%M:%SZ)] HTTP $code — $(cat /tmp/cron_out 2>/dev/null)"
+            if [ "$code" = "200" ]; then ok=$((ok+1)); else erro=$((erro+1)); fi
+          done
+          echo "pings ok=$ok erro=$erro"
+          test "$ok" -gt 0

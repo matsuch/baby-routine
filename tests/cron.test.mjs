@@ -90,6 +90,32 @@ await teste('família com ntfy desligado é ignorada', async () => {
   assert.equal(r.enviados, 0);
 });
 
+await teste('conta as falhas de envio na resposta (não fica igual a "nada a enviar")', async () => {
+  const now = 10 * MS_HOUR;
+  const db = fakeDb({ now, families: [{ key: FAM, profile: perfil() }], events: feedVencida(now) });
+  const r = await runCron(db, { publish: async () => { throw new Error('HTTP 400 — invalid JSON'); } });
+  assert.equal(r.enviados, 0);
+  assert.equal(r.falhas, 1, 'a falha precisa aparecer no resumo do cron');
+  assert.match(r.ultimoErro, /400/);
+});
+
+await teste('alertas sem id não colidem no dedup', async () => {
+  const now = 10 * MS_HOUR;
+  const p = perfil();
+  // Formato que o app gravava antes da correção do saveMed: sem `id`.
+  p.meds = [
+    { name: 'ADZ Vitamina', active: true, category: 'remedio', repeat: { every: 6, unit: 'hour' }, startAt: now },
+    { name: 'Cefalexina', active: true, category: 'remedio', repeat: { every: 6, unit: 'hour' }, startAt: now },
+  ];
+  const db = fakeDb({ now, families: [{ key: FAM, profile: p }], events: {} });
+  const cap = capturador();
+  const r = await runCron(db, cap);
+  assert.equal(r.enviados, 2, 'os dois alertas precisam sair, não só um');
+  const nomes = cap.enviados.map((e) => e.opts.message).sort();
+  assert.match(nomes[0], /ADZ Vitamina/);
+  assert.match(nomes[1], /Cefalexina/);
+});
+
 await teste('falha no envio desmarca o dedup (reenvia no próximo tick)', async () => {
   const now = 10 * MS_HOUR;
   const db = fakeDb({ now, families: [{ key: FAM, profile: perfil() }], events: feedVencida(now) });
